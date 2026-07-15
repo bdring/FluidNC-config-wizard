@@ -1359,7 +1359,7 @@ function computeResourcePins() {
  * and a "MOSFET1" driver pin) -- only one of them can actually be used in a
  * real config. Whenever a resource gets bound to a role, its pins go into a
  * "used" list; every UNASSIGNED resource that shares a pin with something
- * already used gets its role selector(s) disabled with a "conflicts with"
+ * already used gets its role selector(s) disabled with an "already assigned to"
  * note, so the user can't accidentally double-bind the same wire. Recomputed
  * on every binding change (called from generateDraft(), same pattern as
  * refreshHotspotStates()), so undoing the owning resource's binding
@@ -1408,7 +1408,7 @@ function refreshGpioConflicts() {
     allSelects.forEach(s => { s.disabled = !!conflict; });
     if (note) {
       if (conflict) {
-        note.textContent = `conflicts with ${conflict.label}`;
+        note.textContent = `already assigned to ${conflict.label}`;
         note.title = note.textContent; // full text on hover in case it's ellipsis-truncated
         note.style.display = "flex";
       } else {
