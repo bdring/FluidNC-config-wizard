@@ -171,8 +171,37 @@
     padding: 0 2px; margin-left: -4px;
   }
   .col.hotspot { border-right: 1px solid var(--border); }
-  #hotspotImgWrap { position: relative; display: inline-block; max-width: 100%; }
-  #hotspotImgWrap img { max-width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+  /* Always scale the board photo to fill the pane's width -- not just
+     capping a large photo down, but also stretching a small one up. A photo
+     scaled up at view time by the browser looks the same as one baked to a
+     bigger resolution once at export time (same source pixels, same
+     interpolation) -- so hotspot-editor.html's export step doesn't
+     manufacture extra pixels; the goal here is legibly locating a
+     connector, not photo quality, and this way the file itself stays
+     honestly sized.
+     display:block + width:100% here is load-bearing, not decorative: it's
+     what gives updateHotspotLayout() a real, container-driven width to read
+     via wrap.getBoundingClientRect() and adapt to. An inline-block wrap
+     (tried briefly, reverted) shrink-wraps to its OWN content instead --
+     since that content (#hotspotImg) is exactly what this function sets
+     FROM the wrap's measured width, that shrink-wrap just mirrors the
+     img's current size right back, i.e. it never actually reflects the
+     pane's available width and the photo silently stops adapting to it.
+     #hotspotImgPad exists to reserve room AROUND the photo for hotspots
+     that extend past its own 0-100% bounds (see updateHotspotLayout() --
+     hotspots.yaml's rect/label_rect coordinates are percentages of the
+     RAW, unpadded photo, unbounded, matching exactly what
+     hotspot-editor.html itself edits/exports now that IT no longer pads
+     the image either) -- its padding is computed and set in JS, not CSS,
+     since it depends on both the current column width and each board's own
+     hotspot extents. #hotspotImg's width is likewise set in JS (a plain
+     px value, not width:100%) for the same reason. #hotspotOverlay spans
+     the FULL padded box (content + padding) of imgWrap, i.e. the whole
+     reserved workspace, not just the photo itself -- same structure
+     hotspot-editor.html's own #imgWrap/#imgPad/#overlay already use. */
+  #hotspotImgWrap { position: relative; display: block; width: 100%; }
+  #hotspotImgPad { display: block; }
+  #hotspotImgWrap img { display: block; user-select: none; -webkit-user-drag: none; }
   #hotspotOverlay { position: absolute; inset: 0; }
   /* Color encodes binding state, not just hover: yellow (--tbd, same color
      the rest of the wizard already uses for "open/TBD") for a connector
@@ -215,9 +244,31 @@
   .hotspot-label {
     position: absolute; top: 50%; left: 2px; right: 2px; transform: translateY(-50%);
     z-index: 2; pointer-events: none;
-    font-size: 10px; line-height: 1.3; color: #f2f6f8; background: rgba(10,16,19,.72);
-    padding: 1px 4px; border-radius: 2px; white-space: normal; word-break: break-word;
+    /* --hotspot-scale is set on #hotspotImgWrap by updateHotspotLayout() to
+       the photo's current rendered width divided by a fixed reference width
+       (HOTSPOT_FONT_REF_WIDTH, currently 1000) -- NOT the photo's own
+       native resolution, which was tried first and caused a real bug: it
+       tied font size to a per-photo value that has nothing to do with how
+       big the photo is actually rendered, so a photo with a large native
+       resolution shown at a modest size (e.g. in a narrower pane) produced
+       a tiny, near-illegible scale factor. 14px is this codebase's own
+       tuned base size (bumped up from an initial 10px, which read too
+       small even at scale close to 1). Falls back to 1 (unscaled) before
+       JS has run. */
+    font-size: calc(14px * var(--hotspot-scale, 1)); line-height: 1.3; color: #f2f6f8;
+    white-space: normal; word-break: break-word;
     text-align: center; overflow: visible; box-sizing: border-box;
+  }
+  /* This OUTER element intentionally spans the full rect width (see the
+     comment above on why -- left/right, not left+transform) and stays
+     background-less; the dark backing chip lives on this INNER span
+     instead, so it hugs just the rendered characters rather than the whole
+     (often much wider) box. An inline element naturally shrinks to its own
+     text -- and, for text long enough to wrap onto more than one line (see
+     word-break above), naturally draws a separate right-sized chip behind
+     EACH line rather than one wide box spanning the rect's full width. */
+  .hotspot-label-text {
+    background: rgba(10,16,19,.72); padding: 1px 4px; border-radius: 2px;
   }
   /* The connector's OWN name (e.g. "Motor1") always shows as the corner
      chip above (.hotspot-label, unconditional). .hotspot-role-label is a
@@ -234,7 +285,10 @@
      the rect for now (same "fix later" stance as the corner chip). */
   .hotspot-role-label {
     position: absolute; z-index: 2; pointer-events: none; padding: 1px 4px;
-    font-size: 10px; line-height: 1.25; color: #f2f6f8; background: rgba(10,16,19,.72);
+    /* Same --hotspot-scale AND base size as .hotspot-label above -- kept in
+       sync with it deliberately, so a connector's own name and its assigned
+       role read at the same size. */
+    font-size: calc(14px * var(--hotspot-scale, 1)); line-height: 1.25; color: #000; background: palegreen;
     display: flex; align-items: center; justify-content: center;
     width: 100%; height: 100%; text-align: center; white-space: normal;
     word-break: break-word; overflow: visible; box-sizing: border-box;
@@ -728,8 +782,57 @@ function boardHasUartTmc(b) {
   return !!(b.motor_sockets && b.motor_sockets.sockets &&
     b.motor_sockets.sockets.some(s => s.extra && s.extra.bus === "uart1"));
 }
+// Used only for the informational row-label hints (e.g. "I/O Expansion
+// (uart_channel, uart1)") shown BEFORE the user has picked anything --
+// generateDraft() itself uses spareUartCandidates()/nextSpareUartNum()
+// below, which actually accounts for more than one of RS485/expansion
+// UART/I2C-as-UART being bound at once. Kept as a single best-guess number
+// here purely because showing every row the same static hint text
+// regardless of what else might get bound is simpler and still broadly
+// useful as a rough expectation-setter, not because only one is ever really
+// available -- see spareUartCandidates()'s own comment for why that
+// assumption doesn't hold.
 function defaultSecondaryUartNum(b) {
   return boardHasUartTmc(b) ? 2 : 1;
+}
+
+// ESP32 has 3 UART hardware peripherals total: uart0 is always reserved for
+// the USB/serial console (see boardHasUartTmc()'s comment for the wiki
+// source), leaving uart1 and uart2 as two genuinely INDEPENDENT "spare"
+// UARTs, each with its own distinct set of assignable pins. A board WITHOUT
+// onboard UART-addressed TMC drivers (which would otherwise consume uart1)
+// can freely use BOTH uart1 and uart2 for two different peripherals at
+// once -- e.g. RS485 on one, an expansion UART connector on the other --
+// with no real hardware conflict between them. Only a board WITH onboard
+// UART-TMC drivers is down to a single remaining spare (uart2). This
+// replaces an earlier version of this logic that unconditionally handed
+// EVERY one of RS485/expansion UART/I2C-as-UART the SAME single number on a
+// non-TMC board, regardless of how many of them actually ended up bound at
+// once -- silently colliding them all onto one shared uart1 block even
+// though the board genuinely had a second free UART sitting unused (a real
+// case that broke a real generated file -- see PROGRESS.md).
+function spareUartCandidates(b) {
+  return boardHasUartTmc(b) ? [2] : [1, 2];
+}
+
+// Hands out a DISTINCT number from spareUartCandidates(board) to each of
+// RS485/expansion UART/I2C-as-UART as generateDraft() binds them, tracked
+// via the shared `usedUartNums` Set passed in (one instance per generateDraft()
+// call) -- so up to two of them can coexist on a board with two genuinely
+// free UARTs. Falls back to reusing the LAST candidate once every candidate
+// is already taken -- a real, unavoidable hardware conflict once every
+// spare UART is spoken for (e.g. all 3 of RS485+expansion+I2C-as-UART bound
+// at once with only 2 spares, or 2 of them bound at once on a UART-TMC
+// board with only 1 spare), which the wizard has no further UART
+// peripherals to invent -- same genuine limitation defaultSecondaryUartNum()
+// was already documented against, just no longer applied OVER-eagerly to
+// cases that aren't actually a conflict.
+function nextSpareUartNum(board, usedUartNums) {
+  const candidates = spareUartCandidates(board);
+  const free = candidates.find(n => !usedUartNums.has(n));
+  const n = free !== undefined ? free : candidates[candidates.length - 1];
+  usedUartNums.add(n);
+  return n;
 }
 
 /* ---------------------------------------------------------------------
@@ -1355,13 +1458,13 @@ function computeResourcePins() {
   resourceLabels = {};
   // resourceKey -> generic_name (see gname()), same universe of keys as
   // resourceLabels/resourcePins -- this is the vocabulary hotspots.yaml
-  // itself is now authored in (its "generic_names" arrays are generic
-  // names, not vendor labels -- a hotspots file is meant to be
+  // itself is now authored in (each hotspot's single "generic_name" is a
+  // generic name, not a vendor label -- a hotspots file is meant to be
   // board-agnostic-legible, and vendor silkscreen text varies wildly/
   // verbosely board to board, e.g. Corgi's "Motor Driver Signals -
   // i2so.1,2,0"). Used for BOTH display (the hotspot corner chip shows
-  // hotspots.yaml's generic_names verbatim, no lookup needed) and matching
-  // (getRowRoleInfo()/jumpToGenericNames()/wireHotspotHoverLinks() all key
+  // hotspots.yaml's generic_name verbatim, no lookup needed) and matching
+  // (getRowRoleInfo()/jumpToGenericName()/wireHotspotHoverLinks() all key
   // off this, not resourceLabels). genericNameToVendorLabel is the
   // reverse, used only to populate the "generic (vendor)" hover text
   // refreshHotspotStates() builds, same format the left-pane rows' own
@@ -1618,6 +1721,95 @@ function refreshRoleUniqueness() {
  * #resourceCol, never a second way to actually bind anything. Hidden
  * entirely (main reverts to its normal 2-column layout) for any board
  * without hotspot data. */
+// Tightest window (in the RAW photo's own 0-100% space, same unbounded
+// space hotspot-editor.html itself now edits/exports in) that contains both
+// the photo (0-100) and every hotspot's rect/label_rect extents, plus a
+// small fixed buffer on every side -- mirrors hotspot-editor.html's own
+// (now-removed) computePaddedBounds(), except here it drives a CSS layout
+// reservation instead of a baked/recomposited image. Purely a function of
+// hotspotData, independent of the photo's rendered size -- computed once
+// per board load, not on every resize.
+const HOTSPOT_PAD_BUFFER_PCT = 3;
+let hotspotBounds = null; // {minX,maxX,minY,maxY} or null if no hotspotData
+
+function computeHotspotBounds() {
+  let minX = 0, maxX = 100, minY = 0, maxY = 100;
+  (hotspotData.hotspots || []).forEach(h => {
+    [h.rect, h.label_rect].forEach(box => {
+      if (!box) return;
+      minX = Math.min(minX, box.x); maxX = Math.max(maxX, box.x + box.w);
+      minY = Math.min(minY, box.y); maxY = Math.max(maxY, box.y + box.h);
+    });
+  });
+  return {
+    minX: minX - HOTSPOT_PAD_BUFFER_PCT, maxX: maxX + HOTSPOT_PAD_BUFFER_PCT,
+    minY: minY - HOTSPOT_PAD_BUFFER_PCT, maxY: maxY + HOTSPOT_PAD_BUFFER_PCT,
+  };
+}
+
+// Reference width that .hotspot-label/.hotspot-role-label's 10px base
+// font-size was tuned to look right at (see --hotspot-scale below) -- NOT
+// tied to any particular photo's own natural resolution, which varies
+// wildly board to board (and is exactly what caused the bug this constant
+// fixes: dividing by naturalWidth instead of a fixed reference meant a
+// photo with a large native resolution, displayed small in a narrow pane,
+// produced a tiny scale factor and near-illegible text, even though the
+// photo itself was rendering at a perfectly reasonable size). 1000 is
+// roughly the size a normalized/downscaled contributor photo (see
+// hotspot-editor.html's own MAX_IMG_DIM) tends to land at.
+const HOTSPOT_FONT_REF_WIDTH = 1000;
+
+/* Sizes the photo to fill the pane's available width (scaling up OR down,
+ * see #hotspotImgWrap's comment) while reserving exactly enough padding
+ * around it -- via #hotspotImgPad -- for every hotspot's extents from
+ * hotspotBounds, then repositions every rect/role-label to match (in px,
+ * not CSS %, since #hotspotOverlay now spans a bigger box than the photo
+ * itself). All closed-form from the wrap's own (padding-independent) width
+ * and the photo's natural aspect ratio -- no iterative feedback loop with
+ * the padding it's also setting. Called once after the photo loads (its
+ * natural size isn't known before then) and again via ResizeObserver on
+ * #hotspotImgWrap any time the available column width changes (window
+ * resize, the left/right panes changing width, etc.). */
+function updateHotspotLayout() {
+  const img = document.getElementById("hotspotImg");
+  const wrap = document.getElementById("hotspotImgWrap");
+  const pad = document.getElementById("hotspotImgPad");
+  const overlay = document.getElementById("hotspotOverlay");
+  if (!img || !wrap || !hotspotBounds || !img.naturalWidth) return;
+  const b = hotspotBounds;
+  const spanXFactor = (b.maxX - b.minX) / 100;
+  const wrapWidth = wrap.getBoundingClientRect().width;
+  const imgW = wrapWidth / spanXFactor;
+  const imgH = imgW * (img.naturalHeight / img.naturalWidth);
+  const leftPad = (0 - b.minX) / 100 * imgW, rightPad = (b.maxX - 100) / 100 * imgW;
+  const topPad = (0 - b.minY) / 100 * imgH, bottomPad = (b.maxY - 100) / 100 * imgH;
+  img.style.width = imgW + "px";
+  img.style.height = imgH + "px";
+  pad.style.padding = `${topPad}px ${rightPad}px ${bottomPad}px ${leftPad}px`;
+  // Ratio of the photo's CURRENT rendered width to the fixed reference --
+  // this is what makes the scaling "rather modest" for a photo already
+  // sized close to 1000px, adjusting mainly for how much wider the overall
+  // workspace (photo + hotspot-overflow padding) ended up vs. the photo
+  // alone, not for the photo's raw native resolution.
+  wrap.style.setProperty("--hotspot-scale", imgW / HOTSPOT_FONT_REF_WIDTH);
+
+  // Reposition every rect/role-label from its stored %-of-raw-photo
+  // coordinates into px within the overlay -- same imgOffset()/pctToPx()
+  // technique hotspot-editor.html's own renderHotspots() uses, needed here
+  // because the overlay is now bigger than the photo (so plain CSS % on
+  // each element, resolved against the OVERLAY, would no longer mean
+  // %-of-photo the way it used to when overlay == photo size).
+  const ir = img.getBoundingClientRect(), or = overlay.getBoundingClientRect();
+  const off = { left: ir.left - or.left, top: ir.top - or.top, width: ir.width, height: ir.height };
+  document.querySelectorAll("#hotspotOverlay [data-pct]").forEach(el => {
+    const box = JSON.parse(el.dataset.pct);
+    el.style.left = (off.left + box.x / 100 * off.width) + "px";
+    el.style.top = (off.top + box.y / 100 * off.height) + "px";
+    el.style.width = (box.w / 100 * off.width) + "px";
+    el.style.height = (box.h / 100 * off.height) + "px";
+  });
+}
+
 function renderHotspotPane() {
   const mainEl = document.querySelector("main");
   const col = document.getElementById("hotspotCol");
@@ -1625,58 +1817,67 @@ function renderHotspotPane() {
     col.style.display = "none";
     mainEl.style.gridTemplateColumns = "1fr max-content";
     col.innerHTML = "";
+    hotspotBounds = null;
     return;
   }
   mainEl.style.gridTemplateColumns = "320px 1fr max-content";
   col.style.display = "";
   col.innerHTML = `<div class="note">Click a highlighted region to jump to its row on the left. (Prototype — board photos/hotspots only exist for the Corgi board so far.)</div>
     <div id="hotspotImgWrap">
-      <img id="hotspotImg" src="${escapeAttr(hotspotData.image)}" alt="board photo">
+      <div id="hotspotImgPad">
+        <img id="hotspotImg" src="${escapeAttr(hotspotData.image)}" alt="board photo">
+      </div>
       <div id="hotspotOverlay"></div>
     </div>`;
   const overlay = document.getElementById("hotspotOverlay");
+  hotspotBounds = computeHotspotBounds();
+  const img = document.getElementById("hotspotImg");
+  const wrap = document.getElementById("hotspotImgWrap");
+  img.addEventListener("load", updateHotspotLayout);
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(updateHotspotLayout).observe(wrap);
   (hotspotData.hotspots || []).forEach(h => {
     const el = document.createElement("div");
     el.className = "hotspot-rect";
-    el.style.left = h.rect.x + "%";
-    el.style.top = h.rect.y + "%";
-    el.style.width = h.rect.w + "%";
-    el.style.height = h.rect.h + "%";
-    el.dataset.genericNames = JSON.stringify(h.generic_names);
-    el.onclick = () => jumpToGenericNames(h.generic_names, el);
+    el.dataset.pct = JSON.stringify(h.rect); // read back by updateHotspotLayout()
+    el.dataset.genericName = h.generic_name;
+    el.onclick = () => jumpToGenericName(h.generic_name, el);
     // Connector's own name always shows in the connector box's corner --
     // unconditional, regardless of whether a label_rect exists. hotspots.yaml
-    // records these as "generic_names" (see computeResourcePins()'
+    // records this as a single "generic_name" (see computeResourcePins()'
     // resourceGenericNames comment) -- shown verbatim, no lookup needed.
-    // The board's own vendor label(s) are available on hover for anyone who
-    // wants to cross-reference the silkscreen/vendor documentation term.
-    // el.title (the hover tooltip, "generic (vendor)" per name, plus any
-    // assigned role) is set/kept live by refreshHotspotStates() below, not
-    // here -- same single source of truth the assigned/unassigned coloring
-    // already uses, so it never needs a separate initial value.
+    // One hotspot, one name -- even a pin shared by two logical roles gets
+    // two SEPARATE hotspots on the photo, not one box naming both (see
+    // PROGRESS.md). The board's own vendor label is available on hover for
+    // anyone who wants to cross-reference the silkscreen/vendor
+    // documentation term. el.title (the hover tooltip, "generic (vendor)",
+    // plus any assigned role) is set/kept live by refreshHotspotStates()
+    // below, not here -- same single source of truth the assigned/
+    // unassigned coloring already uses, so it never needs a separate
+    // initial value.
     const labelSpan = document.createElement("span");
     labelSpan.className = "hotspot-label";
-    labelSpan.textContent = h.generic_names.join(", ");
+    const labelText = document.createElement("span"); // see .hotspot-label-text's comment -- carries just the background/padding, hugging the text
+    labelText.className = "hotspot-label-text";
+    labelText.textContent = h.generic_name;
+    labelSpan.appendChild(labelText);
     el.appendChild(labelSpan);
     overlay.appendChild(el);
     if (h.label_rect) {
       // Separate box for the ASSIGNED ROLE (once one exists), positioned in
       // the same % coordinate space as the connector rect (i.e. relative to
-      // the overlay, not nested inside the connector box), so it can sit
+      // the RAW photo, not nested inside the connector box), so it can sit
       // anywhere on the photo -- typically just outside a small/crowded
       // connector where there's no room for both its own name and a role.
       // Text is populated/hidden live by refreshHotspotStates() below,
       // since the assigned role can change on every binding edit.
       const roleSpan = document.createElement("span");
       roleSpan.className = "hotspot-role-label" + (h.label_orientation === "vertical" ? " vertical" : "");
-      roleSpan.dataset.genericNames = JSON.stringify(h.generic_names);
-      roleSpan.style.left = h.label_rect.x + "%";
-      roleSpan.style.top = h.label_rect.y + "%";
-      roleSpan.style.width = h.label_rect.w + "%";
-      roleSpan.style.height = h.label_rect.h + "%";
+      roleSpan.dataset.genericName = h.generic_name;
+      roleSpan.dataset.pct = JSON.stringify(h.label_rect);
       overlay.appendChild(roleSpan);
     }
   });
+  updateHotspotLayout(); // no-ops until the img's `load` fires if it hasn't already (e.g. cached image)
   refreshHotspotStates();
 }
 
@@ -1692,8 +1893,8 @@ function renderHotspotPane() {
  * any select that's hidden (style.display "none", e.g. an output row's
  * unused secondary picker) or has no options yet is skipped. */
 function getRowRoleInfo(genericName) {
-  // Matched via resourceGenericNames -- hotspots.yaml's own
-  // "generic_names" arrays are written in this same vocabulary (see
+  // Matched via resourceGenericNames -- hotspots.yaml's own single
+  // "generic_name" per hotspot is written in this same vocabulary (see
   // computeResourcePins()' resourceGenericNames comment), same as what a
   // row's displayed ".name" text now shows, so this now lines up directly
   // rather than needing resourceLabels (the vendor label) as an
@@ -1718,68 +1919,54 @@ function getRowRoleInfo(genericName) {
 function refreshHotspotStates() {
   if (!hotspotData) return;
   document.querySelectorAll("#hotspotOverlay .hotspot-rect").forEach(el => {
-    let genericNames = [];
-    try { genericNames = JSON.parse(el.dataset.genericNames || "[]"); } catch (e) {}
-    const infos = genericNames.map(getRowRoleInfo);
-    const assigned = infos.some(i => i.assigned);
-    el.classList.toggle("assigned", assigned);
+    const generic = el.dataset.genericName;
+    const info = getRowRoleInfo(generic);
+    el.classList.toggle("assigned", info.assigned);
     // vendor label in parens when it differs -- same "generic (vendor)"
     // format used by the left-pane rows' own hover title, see makeRow()/etc.
-    el.title = genericNames.map((generic, i) => {
-      const vendor = genericNameToVendorLabel[generic];
-      const base = (!vendor || vendor === generic) ? generic : `${generic} (${vendor})`;
-      return infos[i].assigned ? `${base}: ${infos[i].roleText}` : base;
-    }).join("\n");
+    const vendor = genericNameToVendorLabel[generic];
+    const base = (!vendor || vendor === generic) ? generic : `${generic} (${vendor})`;
+    el.title = info.assigned ? `${base}: ${info.roleText}` : base;
   });
   // Populate/hide each hotspot's separate role label (only exists for
   // hotspots with an editor-authored label_rect -- see renderHotspotPane()).
   // Empty when nothing's assigned yet: :empty { display:none } in CSS hides
   // the box entirely rather than showing a blank chip over the photo.
   document.querySelectorAll("#hotspotOverlay .hotspot-role-label").forEach(el => {
-    let genericNames = [];
-    try { genericNames = JSON.parse(el.dataset.genericNames || "[]"); } catch (e) {}
-    const infos = genericNames.map(getRowRoleInfo);
-    const roleText = infos.filter(i => i.assigned).map(i => i.roleText).join(" / ");
-    el.textContent = roleText;
+    const info = getRowRoleInfo(el.dataset.genericName);
+    el.textContent = info.assigned ? info.roleText : "";
   });
 }
 
-/* Clicking a hotspot highlights + scrolls to whichever left-pane row(s)
- * share its label(s) -- a hotspot can name more than one label (a single
- * physical connector serving more than one FluidNC resource role, e.g.
- * Corgi's MOSFET1/5V-out pin), in which case every matching row is
- * highlighted, not just the first. Purely a navigation aid -- clicking
- * never changes any binding itself. Magenta (.active / .hotspot-target) is
- * reserved for this selection state alone, distinct from the yellow/green
- * assigned-state colors set by refreshHotspotStates(), so "the one I just
- * clicked" always reads unambiguously regardless of whether it's also
- * bound to something yet. */
+/* Clicking a hotspot highlights + scrolls to its one matching left-pane row
+ * (one hotspot, one generic name, one row -- a pin shared by two logical
+ * roles gets two separate hotspots on the photo, each naming its own role,
+ * not one hotspot naming both; see PROGRESS.md). Purely a navigation aid --
+ * clicking never changes any binding itself. Magenta (.active /
+ * .hotspot-target) is reserved for this selection state alone, distinct
+ * from the yellow/green assigned-state colors set by refreshHotspotStates(),
+ * so "the one I just clicked" always reads unambiguously regardless of
+ * whether it's also bound to something yet. */
 function clearHotspotSelection() {
   document.querySelectorAll(".hotspot-rect.active").forEach(e => e.classList.remove("active"));
   document.querySelectorAll("#resourceCol .row.hotspot-target").forEach(e => e.classList.remove("hotspot-target"));
 }
 
-function jumpToGenericNames(genericNameList, hotspotEl) {
+function jumpToGenericName(genericName, hotspotEl) {
   clearHotspotSelection();
   if (hotspotEl) hotspotEl.classList.add("active");
-  const rows = Array.from(document.querySelectorAll("#resourceCol .row"));
-  let first = null;
-  genericNameList.forEach(generic => {
-    // See getRowRoleInfo()'s comment -- genericNameList is hotspots.yaml's
-    // own "generic_names" vocabulary, matched via resourceGenericNames.
-    const key = Object.keys(resourceGenericNames).find(k => resourceGenericNames[k] === generic);
-    const row = key ? rows.find(r => r.dataset.resourceKey === key) : null;
-    if (row) {
-      row.classList.add("hotspot-target");
-      if (!first) first = row;
-    }
-  });
-  if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
+  // See getRowRoleInfo()'s comment -- genericName is hotspots.yaml's own
+  // vocabulary, matched via resourceGenericNames.
+  const key = Object.keys(resourceGenericNames).find(k => resourceGenericNames[k] === genericName);
+  const row = key ? Array.from(document.querySelectorAll("#resourceCol .row")).find(r => r.dataset.resourceKey === key) : null;
+  if (!row) return;
+  row.classList.add("hotspot-target");
+  if (row.scrollIntoView) row.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /* Same selection, the other direction: clicking a left-pane resource row
  * activates + scrolls to its matching hotspot(s) on the photo, same
- * magenta .active/.hotspot-target state jumpToGenericNames() sets, just
+ * magenta .active/.hotspot-target state jumpToGenericName() sets, just
  * started from the opposite end. Wired alongside the hover link below
  * (same matches array), since both need the identical row<->rect
  * correspondence. */
@@ -1804,11 +1991,7 @@ function wireHotspotHoverLinks() {
     // incidentally, the row's own displayed text).
     const generic = resourceGenericNames[row.dataset.resourceKey];
     if (!generic) return;
-    const matches = rects.filter(el => {
-      let genericNames = [];
-      try { genericNames = JSON.parse(el.dataset.genericNames || "[]"); } catch (e) {}
-      return genericNames.includes(generic);
-    });
+    const matches = rects.filter(el => el.dataset.genericName === generic);
     if (!matches.length) return;
     row.addEventListener("mouseenter", () => matches.forEach(el => el.classList.add("hover")));
     row.addEventListener("mouseleave", () => matches.forEach(el => el.classList.remove("hover")));
@@ -2594,16 +2777,17 @@ function generateDraft() {
   // as how a dedicated TMC UART bus becomes its own uart1: block elsewhere
   // in this file. modbus_id is set to its near-universal real value (1)
   // rather than left open, since it almost never changes in practice.
-  // uart_num defaults to 1, or 2 on a board with UART-addressed onboard TMC
-  // drivers already on 1 (see defaultSecondaryUartNum) -- confirmed against
-  // real per-board wiki examples (6x/Corgi's own Huanyang examples use
-  // uart1; the 4x wiki's commented-out RS485 example, on a TMC-UART board,
-  // uses uart2).
+  // uart_num is handed out by nextSpareUartNum()/spareUartCandidates(),
+  // shared with the expansion-UART and I2C-as-UART sections below via
+  // usedUartNums -- confirmed against real per-board wiki examples
+  // (6x/Corgi's own Huanyang examples use uart1; the 4x wiki's
+  // commented-out RS485 example, on a TMC-UART board, uses uart2).
+  const usedUartNums = new Set(); // shared across RS485/expansion-UART/I2C-as-UART below
   (board.rs485_channels || []).forEach((ch, i) => {
     const role = bindings[resourceKeyRs485(i)];
     if (!role || role === "unused" || !role.startsWith("vfd:")) return;
     const model = role.split(":")[1];
-    const n = defaultSecondaryUartNum(board);
+    const n = nextSpareUartNum(board, usedUartNums);
     // uartN: (the dependency) is set before ModbusVFD: (the referencer) --
     // object key insertion order drives jsyaml.dump's output order, and
     // conventionally a bus block is declared before the thing that uses it.
@@ -2632,16 +2816,15 @@ function generateDraft() {
   // suggests that's a hard requirement). No rts_pin/cts_pin board fact
   // exists for this connector type (see expansion_uart schema) -- both are
   // always written as literal NO_PIN, matching every real example seen.
-  // Shares the same uart_num default/collision policy as RS485 above --
-  // if a board's config binds both an expansion_uart AND an RS485 channel
-  // and they land on the same uart_num, this cfg[`uart${n}`] assignment
-  // will simply overwrite the earlier one, faithfully reproducing the
-  // real, accepted "only one of them is usable" limitation on such boards
-  // rather than silently working around it.
+  // Shares the same usedUartNums pool as RS485 above (and I2C-as-UART
+  // below) -- gets its own DISTINCT uart_num when the board has two spare
+  // UARTs free (see spareUartCandidates()), only colliding with another
+  // section's uart_num in the genuine, unavoidable case where every spare
+  // UART is already spoken for.
   (board.expansion_uarts || []).forEach((ex, i) => {
     const role = bindings[resourceKeyExpUart(i)];
     if (!role || role === "unused" || role !== "uart_channel") return;
-    const n = defaultSecondaryUartNum(board);
+    const n = nextSpareUartNum(board, usedUartNums);
     // Same sibling-of-cfg annotation placement as RS485 above.
     const uartBlock = {
       txd_pin: ex.txd_pin,
@@ -2673,7 +2856,7 @@ function generateDraft() {
       annotate(cfg, "i2c0", ic.label);
       cfg.i2c0 = { sda_pin: ic.sda_pin, scl_pin: ic.scl_pin };
     } else if (role === "expansion_uart") {
-      const n = defaultSecondaryUartNum(board);
+      const n = nextSpareUartNum(board, usedUartNums); // same shared pool as RS485/expansion-UART above
       const uartBlock = {
         txd_pin: ic.scl_pin,
         rxd_pin: ic.sda_pin,

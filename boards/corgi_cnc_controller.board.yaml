@@ -81,12 +81,12 @@ generic_pins:
   # Recorded per this board's own stated fact, not copied from 6x.
   - { label: "Inputs - gpio.2",  generic_name: "In2", mcu_pin: gpio.2,  direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: true } }
   - { label: "Inputs - gpio.26", generic_name: "In26", mcu_pin: gpio.26, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Inputs - gpio.32", generic_name: "In32", mcu_pin: gpio.32, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
   - { label: "Inputs - gpio.33", generic_name: "In33", mcu_pin: gpio.33, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Inputs - gpio.34", generic_name: "In34", mcu_pin: gpio.34, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - gpio.32", generic_name: "In32", mcu_pin: gpio.32, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
   - { label: "Inputs - gpio.35", generic_name: "In35", mcu_pin: gpio.35, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Inputs - gpio.36", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - gpio.34", generic_name: "In34", mcu_pin: gpio.34, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
   - { label: "Inputs - gpio.39", generic_name: "In39", mcu_pin: gpio.39, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - gpio.36", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
 
   # 4-channel 5V logic-level output bank (74AHCT125 buffer, same chip as
   # 6x/4x: ~8-10mA typical/channel, 25mA/channel absolute max, 50mA total for

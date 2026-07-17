@@ -1,0 +1,103 @@
+board_id: mks_dlc32_v2_1
+image: images/mks_dlc32_v2_1.jpg
+hotspots:
+  - generic_name: "Motor1"
+    rect: {x: 11.00, y: 2.00, w: 13.00, h: 6.00}
+    label_rect: {x: 11.00, y: -11.00, w: 13.00, h: 13.00}
+    label_orientation: vertical
+  - generic_name: "Motor2"
+    rect: {x: 25.00, y: 2.00, w: 28.00, h: 6.00}
+    label_rect: {x: 25.00, y: -11.00, w: 28.00, h: 13.00}
+    label_orientation: horizontal
+  - generic_name: "Motor3"
+    rect: {x: 54.00, y: 2.00, w: 13.00, h: 6.00}
+    label_rect: {x: 54.00, y: -11.00, w: 13.00, h: 13.00}
+    label_orientation: horizontal
+  - generic_name: "In36"
+    rect: {x: 92.00, y: 9.00, w: 6.00, h: 8.00}
+    label_rect: {x: 92.00, y: 17.00, w: 6.00, h: 16.00}
+    label_orientation: vertical
+  - generic_name: "In35"
+    rect: {x: 85.00, y: 9.00, w: 6.00, h: 8.00}
+    label_rect: {x: 85.00, y: 17.00, w: 6.00, h: 16.00}
+    label_orientation: vertical
+  - generic_name: "In34"
+    rect: {x: 78.00, y: 9.00, w: 6.00, h: 8.00}
+    label_rect: {x: 78.00, y: 17.00, w: 6.00, h: 16.00}
+    label_orientation: vertical
+  - generic_name: "In22"
+    rect: {x: 71.00, y: 9.00, w: 6.00, h: 8.00}
+    label_rect: {x: 71.00, y: 17.00, w: 6.00, h: 16.00}
+    label_orientation: vertical
+  - generic_name: "Spindle Out32"
+    rect: {x: 4.00, y: 27.00, w: 9.00, h: 10.00}
+    label_rect: {x: -3.00, y: 27.00, w: 7.00, h: 12.00}
+    label_orientation: vertical
+  - generic_name: "I2C"
+    rect: {x: 66.00, y: 9.00, w: 5.00, h: 8.00}
+    label_rect: {x: 61.00, y: 9.00, w: 5.00, h: 16.00}
+    label_orientation: vertical
+  - generic_name: "5V Out25"
+    rect: {x: 57.00, y: 72.00, w: 7.00, h: 5.00}
+    label_rect: {x: 42.00, y: 72.00, w: 15.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "5V Out26"
+    rect: {x: 64.00, y: 72.00, w: 6.00, h: 5.00}
+    label_rect: {x: 64.00, y: 62.00, w: 6.00, h: 10.00}
+    label_orientation: vertical
+  - generic_name: "5V Out5"
+    rect: {x: 70.00, y: 72.00, w: 6.00, h: 5.00}
+    label_rect: {x: 70.00, y: 62.00, w: 6.00, h: 10.00}
+    label_orientation: horizontal
+  - generic_name: "5V Out I2S7"
+    rect: {x: 76.00, y: 72.00, w: 7.00, h: 5.00}
+    label_rect: {x: 83.00, y: 72.00, w: 14.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "5V Out27"
+    rect: {x: 70.00, y: 77.00, w: 7.00, h: 5.00}
+    label_rect: {x: 77.00, y: 77.00, w: 12.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "IO19"
+    rect: {x: 73.00, y: 87.00, w: 8.00, h: 5.00}
+    label_rect: {x: 81.00, y: 87.00, w: 15.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "IO18"
+    rect: {x: 73.00, y: 92.00, w: 8.00, h: 5.00}
+    label_rect: {x: 81.00, y: 92.00, w: 15.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "IO23"
+    rect: {x: 62.00, y: 92.00, w: 8.00, h: 5.00}
+    label_rect: {x: 47.00, y: 92.00, w: 15.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "IO33"
+    rect: {x: 57.00, y: 77.00, w: 7.00, h: 5.00}
+    label_rect: {x: 42.00, y: 77.00, w: 15.00, h: 5.00}
+    label_orientation: horizontal
+  - generic_name: "5V Out32"
+    rect: {x: 77.00, y: 2.00, w: 11.00, h: 6.00}
+    label_rect: {x: 77.00, y: -11.00, w: 11.00, h: 13.00}
+    label_orientation: horizontal
+  - generic_name: "OC Out I2S7"
+    rect: {x: 4.00, y: 20.00, w: 6.00, h: 7.00}
+    label_rect: {x: -3.00, y: 16.00, w: 7.00, h: 10.00}
+    label_orientation: vertical
+  - generic_name: "Driver1"
+    rect: {x: 13.00, y: 26.00, w: 12.00, h: 4.00}
+    label_rect: {x: 14.00, y: 30.00, w: 11.00, h: 11.00}
+    label_orientation: vertical
+  - generic_name: "Driver2"
+    rect: {x: 31.00, y: 26.00, w: 11.00, h: 4.00}
+    label_rect: {x: 31.00, y: 30.00, w: 11.00, h: 10.00}
+    label_orientation: vertical
+  - generic_name: "Driver3"
+    rect: {x: 48.00, y: 26.00, w: 11.00, h: 4.00}
+    label_rect: {x: 48.00, y: 30.00, w: 11.00, h: 10.00}
+    label_orientation: horizontal
+  - generic_name: "IO0"
+    rect: {x: 20.00, y: 86.00, w: 8.00, h: 6.00}
+    label_rect: {x: 1.00, y: 86.00, w: 19.00, h: 6.00}
+    label_orientation: horizontal
+  - generic_name: "IO4"
+    rect: {x: 19.00, y: 80.00, w: 9.00, h: 6.00}
+    label_rect: {x: 1.00, y: 80.00, w: 18.00, h: 6.00}
+    label_orientation: horizontal

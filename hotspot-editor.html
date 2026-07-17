@@ -29,9 +29,8 @@
   button.primary { border-color: var(--accent); color: var(--accent); }
   .note { font-size: 12px; color: var(--muted); padding: 8px 14px; }
   .layout { display: grid; grid-template-columns: 260px 1fr 320px; gap: 0; height: calc(100vh - 45px); }
-  .col { overflow-y: auto; padding: 10px 14px; border-right: 1px solid var(--border); }
+  .col { overflow: auto; padding: 10px 14px; border-right: 1px solid var(--border); }
   .col:last-child { border-right: none; }
-  textarea#boardYamlInput { width: 100%; height: 110px; font-size: 11px; font-family: ui-monospace, monospace; }
   .label-row {
     display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; font-size: 12.5px;
   }
@@ -40,9 +39,19 @@
   .label-row.armed { background: rgba(78,168,222,.15); }
   .label-row .lname { flex: 1; }
   .label-row .unplace-btn { font-size: 10px; padding: 0 4px; }
-  #imgWrap { position: relative; display: inline-block; max-width: 100%; }
-  #boardImg { max-width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
-  #overlay { position: absolute; inset: 0; cursor: crosshair; }
+  /* No max-width here -- #boardImg is deliberately rendered at its natural
+     (post-normalize) pixel size, which can exceed the column's width for a
+     big photo; the .col's own overflow:auto (both axes, above) is what
+     makes the rest of it reachable, rather than silently clipping it. */
+  #imgWrap { position: relative; display: inline-block; background: var(--panel); border-radius: 4px; }
+  #imgPad { display: inline-block; padding: 150px; }
+  #boardImg { max-width: none; display: block; user-select: none; -webkit-user-drag: none; outline: 1px dashed var(--muted); }
+  #overlay {
+    position: absolute; inset: 0; cursor: crosshair;
+    background-image:
+      repeating-linear-gradient(to right, rgba(216,226,230,.08) 0 1px, transparent 1px 5%),
+      repeating-linear-gradient(to bottom, rgba(216,226,230,.08) 0 1px, transparent 1px 5%);
+  }
   .rect {
     position: absolute; border: 2px solid var(--accent); background: rgba(78,168,222,.15);
     box-sizing: border-box; cursor: move;
@@ -87,43 +96,45 @@
 <body>
 
 <h1>FluidNC Board Hotspot Editor — Prototype</h1>
-<div class="toolbar">
-  <label>Image URL:</label>
-  <input type="text" id="imgUrl" value="http://wiki.fluidnc.com/hardware/corgi_1p1.jpg">
-  <button id="loadImgBtn">Load image</button>
-  <span class="note" style="padding:0 8px 0 0">or</span>
-  <button id="loadImgFileBtn">Load image file…</button>
-  <input type="file" id="loadImgFileInput" accept="image/*" style="display:none">
-  <span class="note" style="padding:0">Test board: Corgi (image from the FluidNC wiki's Corgi page)</span>
-</div>
 
 <div class="layout">
   <div class="col">
     <h2>Board resource list</h2>
-    <textarea id="boardYamlInput" placeholder="Load a board.yaml file below, or paste/type a plain label list here (one per line, label | resource type), then click Parse labels."></textarea>
-    <div class="toolbar" style="padding:6px 0; border:none">
+    <div class="toolbar" style="padding:0 0 6px; border:none">
       <button id="loadBoardFileBtn">Load board.yaml file…</button>
       <input type="file" id="loadBoardFileInput" accept=".yaml,.yml,.txt,text/yaml,text/plain" style="display:none">
-      <button id="parseBtn">Parse labels</button>
     </div>
     <div class="note" id="loadBoardNote" style="padding:0 0 6px"></div>
     <div class="note" style="padding:0 0 8px">
-      Load a real <code>&lt;board&gt;.board.yaml</code> file (labels are extracted automatically from its
+      Load a real <code>&lt;board&gt;.board.yaml</code> file -- labels are extracted automatically from its
       <code>motor_sockets</code>/<code>generic_pins</code>/<code>rs485_channels</code>/<code>expansion_uarts</code>/<code>i2c_connectors</code>
-      entries), or paste/type a plain label list yourself, one line per resource label in the format
-      <code>label | resource type</code>. Check one or more labels that share the SAME physical connector
-      (e.g. a pin doing double duty as both a 5V output and a MOSFET), then drag a rectangle on the image
-      to place them together.
+      entries. Pick one label on the left, then drag a rectangle on the image to
+      place it -- one hotspot, one name, even for a pin that does double duty (e.g. a MOSFET
+      output also usable as a 5V output): give each role its own separate hotspot on the photo.
     </div>
-    <h2>Labels (<span id="labelCount">0</span>)</h2>
+    <h2>Connector Names (<span id="labelCount">0</span>)</h2>
     <div id="labelList"></div>
   </div>
 
   <div class="col" style="border-right:1px solid var(--border)">
     <h2>Board image</h2>
-    <div class="note" style="padding:0 0 8px" id="drawHint">Check one or more labels on the left, then click-drag on the image to draw a rectangle.</div>
+    <div class="toolbar" style="padding:0 0 6px; border:none">
+      <button id="loadImgFileBtn">Load board photo…</button>
+      <input type="file" id="loadImgFileInput" accept="image/*" style="display:none">
+    </div>
+    <div class="note" id="imgLoadNote" style="padding:0 0 6px">Load a local image file to begin. It's normalized (downscaled/recompressed) automatically -- nothing is fetched from a URL.</div>
+    <div class="toolbar" style="padding:0 0 6px; border:none">
+      <button id="zoomOutBtn">−</button>
+      <span class="note" id="zoomLabel" style="padding:0 4px">100%</span>
+      <button id="zoomInBtn">+</button>
+      <button id="zoomResetBtn">Reset zoom</button>
+      <span class="note" style="padding:0 0 0 8px">or Ctrl/⌘+scroll over the image</span>
+    </div>
+    <div class="note" style="padding:0 0 8px" id="drawHint">Pick a label on the left, then click-drag on the image to draw a rectangle.</div>
     <div id="imgWrap">
-      <img id="boardImg" src="" alt="board photo">
+      <div id="imgPad">
+        <img id="boardImg" src="" alt="board photo">
+      </div>
       <div id="overlay"></div>
     </div>
   </div>
@@ -134,7 +145,8 @@
       <button id="loadBtn">Load hotspots file…</button>
       <input type="file" id="loadFileInput" accept=".yaml,.yml,text/yaml" style="display:none">
       <button id="copyBtn">Copy</button>
-      <button id="downloadBtn">Download</button>
+      <button id="downloadBtn">Download YAML</button>
+      <button id="downloadImgBtn">Download image</button>
       <button id="clearBtn">Clear all</button>
     </div>
     <div class="note" id="loadNote" style="padding:0 0 6px"></div>
@@ -147,7 +159,10 @@
  * Prototype hotspot editor for the FluidNC config wizard's eventual
  * "click on a picture of the board" embellishment. Standalone from the
  * wizard itself -- this tool's only job is producing a small sidecar file
- * (board_id + image + a list of {generic_names[], x%, y%, w%, h%} rectangles)
+ * (board_id + image + a list of {generic_name, x%, y%, w%, h%} rectangles --
+ * one hotspot, one name, even for a pin shared by two logical roles: each
+ * role gets its own separate hotspot on the photo, not a shared box with
+ * two names, per real board.yaml/hotspot evidence -- see PROGRESS.md)
  * that a future clickable-board UI would consume, keyed by the SAME
  * normalized generic_name vocabulary a real board.yaml file's resources
  * carry (motor_sockets, generic_pins, rs485_channels, expansion_uarts,
@@ -254,22 +269,35 @@ function extractLabelsFromBoardYaml(text) {
     // resolved above via pendingLabel on the next iteration.
     const sameLineGm = raw.match(/generic_name:\s*"([^"]*)"|generic_name:\s*'([^']*)'|generic_name:\s*([^\s,}]+)/);
     if (sameLineGm) {
-      out.push({ label: sameLineGm[1] ?? sameLineGm[2] ?? sameLineGm[3], type });
+      out.push({ label: sameLineGm[1] ?? sameLineGm[2] ?? sameLineGm[3], type, vendorLabel });
     } else {
-      pendingLabel = { label: vendorLabel, type }; // may get overwritten by a following generic_name: line
+      pendingLabel = { label: vendorLabel, type, vendorLabel }; // may get overwritten by a following generic_name: line
     }
   });
   flushPending();
   return out;
 }
 
+// Raw text of the last-loaded board.yaml (or plain-list fallback file) --
+// kept only so boardIdGuess() can still pull a real `id:` out of it once the
+// manual paste-a-list textarea (and its "Parse labels" button) were removed
+// as an unneeded control; `labels` itself is now populated directly from
+// `loadLabelsFromText()`/`parseLabelLines()`, with no textarea round-trip.
+let rawBoardYamlText = "";
+
+function parseLabelLines(text) {
+  return text.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
+    const [label, type] = line.split("|").map(s => s.trim());
+    return { label, type: type || "" };
+  });
+}
+
 function loadLabelsFromText(text, sourceName) {
+  rawBoardYamlText = text;
   const extracted = extractLabelsFromBoardYaml(text);
-  const listText = extracted.length
-    ? extracted.map(({ label, type }) => (type ? `${label} | ${type}` : label)).join("\n")
-    : text; // not a resource-bearing board.yaml -- assume it's already a plain label list
-  document.getElementById("boardYamlInput").value = listText;
-  parseLabels();
+  labels = extracted.length ? extracted : parseLabelLines(text); // not a resource-bearing board.yaml -- assume it's already a plain label list
+  armedLabel = null;
+  renderLabels();
   const note = document.getElementById("loadBoardNote");
   note.textContent = extracted.length
     ? `Extracted ${extracted.length} label(s) from ${sourceName || "file"}.`
@@ -288,8 +316,15 @@ document.getElementById("loadBoardFileInput").onchange = (e) => {
 };
 
 let labels = [];        // [{label, type}]
-let armed = new Set();  // labels currently checked, to be assigned to the next drawn rect
-// [{id, rect: {x,y,w,h}, labels: [...], labelRect: {x,y,w,h}|null, labelOrientation: "horizontal"|"vertical"}]
+// One hotspot, one name -- a connector's own physical box on the photo
+// always maps to exactly one generic name, even when it shares a pin with
+// another connector (that other connector gets its OWN box elsewhere on the
+// photo; real board.yaml/hotspot data backs this up -- see PROGRESS.md).
+// `armedLabel` is therefore a single label (or null), not a Set: clicking a
+// row arms just that one label, radio-button style, ready to be assigned to
+// the next drawn rectangle.
+let armedLabel = null;
+// [{id, rect: {x,y,w,h}, label: "...", labelRect: {x,y,w,h}|null, labelOrientation: "horizontal"|"vertical"}]
 // rect and labelRect are both %-of-image-box boxes, same {x,y,w,h} shape,
 // deliberately symmetric with each other. labelRect is optional: many
 // connectors are big enough that the role text fits right inside the
@@ -303,39 +338,35 @@ let drawingLabelForId = null; // set by the "label" button; next drag on the ove
 
 function placedLabelSet() {
   const s = new Set();
-  hotspots.forEach(h => h.labels.forEach(l => s.add(l)));
+  hotspots.forEach(h => s.add(h.label));
   return s;
-}
-
-function parseLabels() {
-  const text = document.getElementById("boardYamlInput").value;
-  labels = text.split("\n").map(l => l.trim()).filter(Boolean).map(line => {
-    const [label, type] = line.split("|").map(s => s.trim());
-    return { label, type: type || "" };
-  });
-  armed.clear();
-  renderLabels();
 }
 
 function renderLabels() {
   const placed = placedLabelSet();
   const col = document.getElementById("labelList");
   col.innerHTML = "";
-  labels.forEach(({ label, type }) => {
+  labels.forEach(({ label, type, vendorLabel }) => {
     const row = document.createElement("div");
-    row.className = "label-row" + (placed.has(label) ? " placed" : "") + (armed.has(label) ? " armed" : "");
+    row.className = "label-row" + (placed.has(label) ? " placed" : "") + (armedLabel === label ? " armed" : "");
+    // Parenthetical shows the board's own vendor/silkscreen label (e.g.
+    // "Driver1"), not the resource type -- falls back to `type` for the
+    // plain "label | type" list-paste path, which has no vendor label of
+    // its own to show.
+    const paren = vendorLabel || type;
     if (placed.has(label)) {
-      row.innerHTML = `<span class="lname">✓ ${escapeHtml(label)}</span>` +
+      row.innerHTML = `<span class="lname">✓ ${escapeHtml(label)}${paren ? `(${escapeHtml(paren)})` : ""}</span>` +
         `<button class="unplace-btn" data-label="${escapeAttr(label)}">unplace</button>`;
     } else {
       const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = armed.has(label);
-      cb.onchange = () => { cb.checked ? armed.add(label) : armed.delete(label); renderLabels(); };
+      cb.type = "radio";
+      cb.name = "armedLabel";
+      cb.checked = armedLabel === label;
+      cb.onchange = () => { armedLabel = cb.checked ? label : null; renderLabels(); };
       row.appendChild(cb);
       const span = document.createElement("span");
       span.className = "lname";
-      span.textContent = label + (type ? ` (${type})` : "");
+      span.textContent = label + (paren ? `(${paren})` : "");
       row.appendChild(span);
     }
     col.appendChild(row);
@@ -348,8 +379,7 @@ function renderLabels() {
 }
 
 function unplaceLabel(label) {
-  hotspots.forEach(h => { h.labels = h.labels.filter(l => l !== label); });
-  hotspots = hotspots.filter(h => h.labels.length > 0);
+  hotspots = hotspots.filter(h => h.label !== label);
   renderLabels();
   renderHotspots();
   renderOutput();
@@ -361,33 +391,107 @@ function escapeAttr(s) { return String(s).replace(/&/g,"&amp;").replace(/"/g,"&q
 /* ---------------------------------------------------------------------
  * Image + drawing
  * ------------------------------------------------------------------- */
-document.getElementById("loadImgBtn").onclick = loadImage;
-function loadImage() {
-  document.getElementById("boardImg").src = document.getElementById("imgUrl").value;
-}
-loadImage();
+// Local file is the ONLY way to load a board photo -- no URL field, no
+// fetch(). This sidesteps CORS entirely (a canvas can only read back pixels
+// from same-origin/blob/data sources) and avoids link rot: the photo a
+// contributor works with is always a file they already have on disk, later
+// committed into images/ alongside the hotspots.yaml, never a live external
+// link. On load the image is normalized -- downscaled (if needed) and
+// recompressed via canvas -- since hotspot rects are percent-based and
+// therefore resolution-independent; this also keeps the eventual downloaded
+// image (see downloadImage()) from ballooning in size.
+const MAX_IMG_DIM = 1600;
 
-// Local-disk alternative to typing a URL. Reads the file as a data: URL via
-// FileReader and drops it straight into the SAME #imgUrl text field that
-// renderOutput()/parseHotspotsYaml() already read from -- so a locally-
-// loaded image round-trips through the exported hotspots.yaml's `image:`
-// field exactly like a typed URL would, no separate code path needed
-// downstream. The data: URL will be long (the whole image, base64-encoded)
-// but that's an acceptable tradeoff for this standalone prototype; a real
-// integration would more likely want the developer to place the image
-// alongside the board's other files and reference it by relative path.
 document.getElementById("loadImgFileBtn").onclick = () => document.getElementById("loadImgFileInput").click();
 document.getElementById("loadImgFileInput").onchange = (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    document.getElementById("imgUrl").value = reader.result;
-    loadImage();
+    const probe = new Image();
+    probe.onload = () => {
+      let { naturalWidth: w, naturalHeight: h } = probe;
+      let src = reader.result;
+      const longEdge = Math.max(w, h);
+      if (longEdge > MAX_IMG_DIM) {
+        const scale = MAX_IMG_DIM / longEdge;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        canvas.getContext("2d").drawImage(probe, 0, 0, canvas.width, canvas.height);
+        src = canvas.toDataURL("image/jpeg", 0.9);
+      }
+      document.getElementById("boardImg").src = src;
+      const note = document.getElementById("imgLoadNote");
+      note.textContent = `Loaded ${file.name} (${w}x${h}${longEdge > MAX_IMG_DIM ? ", downscaled for editing" : ""}).`;
+    };
+    probe.src = reader.result;
   };
   reader.readAsDataURL(file);
   e.target.value = ""; // allow reloading the same filename twice in a row
 };
+
+/* ---------------------------------------------------------------------
+ * Zoom -- resizes #boardImg's actual rendered box (real width/height style,
+ * not a CSS transform), which is what keeps it playing nicely with the
+ * .col's scrollbars (a transform: scale() would paint bigger/smaller
+ * without growing/shrinking the scrollable area to match). #imgPad's
+ * padding scales along with it so the off-image drawing margin stays
+ * proportionate at any zoom level. Every rect coordinate is still just %
+ * of the image either way, so nothing downstream (imgOffset()/pctToPx()/
+ * the drag handlers) needs to know zoom exists -- they just read whatever
+ * getBoundingClientRect() reports right now.
+ * ------------------------------------------------------------------- */
+let zoomLevel = 1;
+const ZOOM_MIN = 0.1, ZOOM_MAX = 4, ZOOM_STEP = 1.25, BASE_PAD_PX = 150;
+
+function applyZoom() {
+  const img = document.getElementById("boardImg");
+  if (!img.naturalWidth) return;
+  img.style.width = Math.round(img.naturalWidth * zoomLevel) + "px";
+  img.style.height = Math.round(img.naturalHeight * zoomLevel) + "px";
+  document.getElementById("imgPad").style.padding = Math.round(BASE_PAD_PX * zoomLevel) + "px";
+  document.getElementById("zoomLabel").textContent = Math.round(zoomLevel * 100) + "%";
+  renderHotspots();
+}
+
+function setZoom(z) {
+  zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  applyZoom();
+}
+
+document.getElementById("zoomInBtn").onclick = () => setZoom(zoomLevel * ZOOM_STEP);
+document.getElementById("zoomOutBtn").onclick = () => setZoom(zoomLevel / ZOOM_STEP);
+document.getElementById("zoomResetBtn").onclick = () => setZoom(1);
+
+// Ctrl/Cmd+scroll to zoom, centered roughly where the cursor is (scrolls the
+// .col to keep the point under the cursor in place). Plain scroll is left
+// alone so normal trackpad/wheel panning of the .col still works.
+// NOTE: uses getElementById() rather than the `overlay` const below, since
+// this code runs (script top-level, in order) BEFORE that const's own
+// declaration line executes -- referencing it here would hit the temporal
+// dead zone.
+document.getElementById("overlay").addEventListener("wheel", (e) => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  const ov = document.getElementById("overlay");
+  const col = ov.closest(".col");
+  const before = ov.getBoundingClientRect();
+  const cursorPctX = (e.clientX - before.left) / before.width;
+  const cursorPctY = (e.clientY - before.top) / before.height;
+  const oldZoom = zoomLevel;
+  setZoom(zoomLevel * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP));
+  const scale = zoomLevel / oldZoom;
+  col.scrollLeft = (col.scrollLeft + cursorPctX * before.width) * scale - cursorPctX * before.width;
+  col.scrollTop = (col.scrollTop + cursorPctY * before.height) * scale - cursorPctY * before.height;
+}, { passive: false });
+
+document.getElementById("boardImg").addEventListener("load", () => {
+  zoomLevel = 1;
+  applyZoom();
+  renderOutput();
+});
+window.addEventListener("resize", renderHotspots);
 
 const imgWrap = document.getElementById("imgWrap");
 const overlay = document.getElementById("overlay");
@@ -396,8 +500,44 @@ let dragging = null; // { hotspotId, mode: "move"|"resize", startX, startY, orig
 
 function overlayRect() { return overlay.getBoundingClientRect(); }
 
+// Hotspot rects are stored as percentages of the ORIGINAL, unpadded board
+// photo -- NOT of the overlay/workspace, which is deliberately drawn larger
+// than the photo (see #imgPad's CSS padding) so role/label boxes can be
+// dragged out past the photo's own edges without any upfront manual padding
+// step. imgOffset() gives the image's on-screen box relative to the
+// overlay's own box, in px, so we can convert between "px within the
+// overlay" (what the DOM/mouse events give us) and "% of the original
+// image" (what's stored) in both directions. Because it's a pure function of
+// current layout, it's safe to call on every mousemove/render rather than
+// caching it.
+function imgOffset() {
+  const ir = document.getElementById("boardImg").getBoundingClientRect();
+  const or = overlayRect();
+  return { left: ir.left - or.left, top: ir.top - or.top, width: ir.width, height: ir.height };
+}
+
+const GRID_SNAP_PCT = 1; // "grid" is a snap granularity, not literally 100 rendered gridlines
+function snapPct(v) { return Math.round(v / GRID_SNAP_PCT) * GRID_SNAP_PCT; }
+
+// Drag-to-draw/move/resize needs to fully own the mouse gesture, even when
+// it strays outside the overlay (e.g. dragging a box's top edge up past the
+// image, or its left edge past it, into the surrounding padding workspace
+// and beyond into a neighboring .col). Without this, the browser's own
+// native text-selection drag starts at the same time -- harmless-looking on
+// a drag toward the bottom/right (there's a lot of blank overlay/padding to
+// cross first), but immediately visible as a text-selection highlight when
+// dragging up/left, since that's a much shorter path to some other
+// element's selectable text (the left pane's label list, in particular).
+// beginNoSelect()/endNoSelect() bracket every drag gesture regardless of
+// which handler started it; endNoSelect() lives in the single shared
+// mouseup listener below so it's always paired up correctly.
+function beginNoSelect() { document.body.style.userSelect = "none"; }
+function endNoSelect() { document.body.style.userSelect = ""; }
+
 overlay.addEventListener("mousedown", (e) => {
   if (e.target !== overlay) return; // clicks on an existing .rect are handled by that rect's own listeners
+  e.preventDefault(); // stop the browser's own selection-drag from starting alongside ours
+  beginNoSelect();
   if (drawingLabelForId !== null) {
     // Armed via a hotspot's "label" button -- this drag places/replaces
     // THAT hotspot's labelRect, not a new connector hotspot.
@@ -410,9 +550,9 @@ overlay.addEventListener("mousedown", (e) => {
     renderHotspots();
     return;
   }
-  if (armed.size === 0) {
+  if (armedLabel === null) {
     document.getElementById("drawHint").textContent =
-      "Check at least one label on the left before drawing a rectangle.";
+      "Pick a label on the left before drawing a rectangle.";
     document.getElementById("drawHint").className = "warn";
     return;
   }
@@ -446,13 +586,20 @@ document.addEventListener("mousemove", (e) => {
     // (that hotspot's separately-positioned labelRect, same move/resize math)
     const box = dragging.target === "label" ? hs.labelRect : hs.rect;
     if (!box) return;
-    const pctDx = dx / r.width * 100, pctDy = dy / r.height * 100;
+    // dx/dy are pixel deltas (translation-invariant), so scaling them into
+    // percent only needs the image's own width/height, not its offset --
+    // but that scale must be the IMAGE's px size (off.width/height), not the
+    // overlay's, since overlay is now larger than the image. Position/size
+    // are intentionally left UNCLAMPED (can go negative or past 100) so
+    // boxes can extend beyond the photo; only a 1% grid snap is applied.
+    const off = imgOffset();
+    const pctDx = dx / off.width * 100, pctDy = dy / off.height * 100;
     if (dragging.mode === "move") {
-      box.x = clamp(dragging.orig.x + pctDx, 0, 100 - box.w);
-      box.y = clamp(dragging.orig.y + pctDy, 0, 100 - box.h);
+      box.x = snapPct(dragging.orig.x + pctDx);
+      box.y = snapPct(dragging.orig.y + pctDy);
     } else {
-      box.w = clamp(dragging.orig.w + pctDx, 1, 100 - box.x);
-      box.h = clamp(dragging.orig.h + pctDy, 1, 100 - box.y);
+      box.w = Math.max(1, snapPct(dragging.orig.w + pctDx));
+      box.h = Math.max(1, snapPct(dragging.orig.h + pctDy));
     }
     renderHotspots();
   }
@@ -460,7 +607,7 @@ document.addEventListener("mousemove", (e) => {
 
 document.addEventListener("mouseup", (e) => {
   if (drawing) {
-    const r = overlayRect();
+    const off = imgOffset();
     const rectEl = drawing.el;
     const left = parseFloat(rectEl.style.left), top = parseFloat(rectEl.style.top);
     const w = parseFloat(rectEl.style.width), h = parseFloat(rectEl.style.height);
@@ -468,12 +615,15 @@ document.addEventListener("mouseup", (e) => {
     const forLabelId = drawing.forLabelId;
     drawing = null;
     if (w > 4 && h > 4) { // ignore accidental clicks/tiny drags
+      // Convert from "px within the overlay" to "% of the original image",
+      // snapped to the 1% grid. Deliberately unclamped -- a box drawn out
+      // past the photo's edge (into the padding workspace) stays there.
       if (forLabelId != null) {
         const h2 = hotspots.find(x => x.id === forLabelId);
         if (h2) {
           h2.labelRect = {
-            x: left / r.width * 100, y: top / r.height * 100,
-            w: w / r.width * 100, h: h / r.height * 100,
+            x: snapPct((left - off.left) / off.width * 100), y: snapPct((top - off.top) / off.height * 100),
+            w: snapPct(w / off.width * 100), h: snapPct(h / off.height * 100),
           };
           if (!h2.labelOrientation) h2.labelOrientation = "horizontal";
           selectedId = h2.id;
@@ -482,18 +632,18 @@ document.addEventListener("mouseup", (e) => {
         const hotspot = {
           id: nextId++,
           rect: {
-            x: left / r.width * 100, y: top / r.height * 100,
-            w: w / r.width * 100, h: h / r.height * 100,
+            x: snapPct((left - off.left) / off.width * 100), y: snapPct((top - off.top) / off.height * 100),
+            w: snapPct(w / off.width * 100), h: snapPct(h / off.height * 100),
           },
-          labels: Array.from(armed),
+          label: armedLabel,
           labelRect: null, labelOrientation: "horizontal",
         };
         hotspots.push(hotspot);
-        armed.clear();
+        armedLabel = null;
         selectedId = hotspot.id;
       }
       document.getElementById("drawHint").textContent =
-        "Check at least one label on the left before drawing a rectangle.";
+        "Pick a label on the left before drawing a rectangle.";
       document.getElementById("drawHint").className = "note";
       renderLabels();
       renderHotspots();
@@ -502,6 +652,7 @@ document.addEventListener("mouseup", (e) => {
     drawingLabelForId = null;
   }
   dragging = null;
+  endNoSelect();
 });
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -513,17 +664,31 @@ function renderHotspots() {
   // (e.g. this same function also runs on mousedown to clear any prior
   // selection highlight).
   overlay.querySelectorAll(".hotspot").forEach(el => el.remove());
+  // Rects are stored as % of the ORIGINAL image, but rendered as px within
+  // the overlay (which is larger than the image) -- pctToPx() below folds in
+  // both the image's on-screen offset and its scale, so it's the inverse of
+  // the "px within overlay -> % of image" math used in the drag handlers.
+  const off = imgOffset();
+  function pctToPx(box) {
+    return {
+      left: off.left + box.x / 100 * off.width, top: off.top + box.y / 100 * off.height,
+      width: box.w / 100 * off.width, height: box.h / 100 * off.height,
+    };
+  }
   hotspots.forEach(h => {
     const el = document.createElement("div");
     el.className = "rect hotspot" + (h.id === selectedId ? " selected" : "");
-    Object.assign(el.style, { left: h.rect.x + "%", top: h.rect.y + "%", width: h.rect.w + "%", height: h.rect.h + "%" });
+    const px = pctToPx(h.rect);
+    Object.assign(el.style, { left: px.left + "px", top: px.top + "px", width: px.width + "px", height: px.height + "px" });
     const tag = document.createElement("div");
     tag.className = "tag";
-    tag.textContent = h.labels.join(", ");
+    tag.textContent = h.label;
     el.appendChild(tag);
 
     el.addEventListener("mousedown", (e) => {
       e.stopPropagation();
+      e.preventDefault();
+      beginNoSelect();
       selectedId = h.id;
       renderHotspots();
       dragging = { hotspotId: h.id, target: "rect", mode: "move", startX: e.clientX, startY: e.clientY, orig: { ...h.rect } };
@@ -555,6 +720,8 @@ function renderHotspots() {
       handle.className = "handle";
       handle.addEventListener("mousedown", (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        beginNoSelect();
         dragging = { hotspotId: h.id, target: "rect", mode: "resize", startX: e.clientX, startY: e.clientY, orig: { ...h.rect } };
       });
       el.appendChild(handle);
@@ -571,7 +738,7 @@ function renderHotspots() {
         drawingLabelForId = (drawingLabelForId === h.id) ? null : h.id;
         document.getElementById("drawHint").textContent = drawingLabelForId === h.id
           ? "Drag on the image to place this hotspot's label box."
-          : "Check at least one label on the left before drawing a rectangle.";
+          : "Pick a label on the left before drawing a rectangle.";
         document.getElementById("drawHint").className = drawingLabelForId === h.id ? "warn" : "note";
         renderHotspots();
       };
@@ -587,17 +754,20 @@ function renderHotspots() {
       const lel = document.createElement("div");
       lel.className = "rect hotspot label-rect" + (h.id === selectedId ? " selected" : "")
         + (drawingLabelForId === h.id ? " armed-for-draw" : "");
+      const lpx = pctToPx(h.labelRect);
       Object.assign(lel.style, {
-        left: h.labelRect.x + "%", top: h.labelRect.y + "%",
-        width: h.labelRect.w + "%", height: h.labelRect.h + "%",
+        left: lpx.left + "px", top: lpx.top + "px",
+        width: lpx.width + "px", height: lpx.height + "px",
       });
       const ltag = document.createElement("div");
       ltag.className = "tag";
-      ltag.textContent = h.labels.join(", ") + (h.labelOrientation === "vertical" ? " (V)" : "");
+      ltag.textContent = h.label + (h.labelOrientation === "vertical" ? " (V)" : "");
       lel.appendChild(ltag);
 
       lel.addEventListener("mousedown", (e) => {
         e.stopPropagation();
+        e.preventDefault();
+        beginNoSelect();
         selectedId = h.id;
         renderHotspots();
         dragging = { hotspotId: h.id, target: "label", mode: "move", startX: e.clientX, startY: e.clientY, orig: { ...h.labelRect } };
@@ -620,6 +790,8 @@ function renderHotspots() {
         handle.className = "handle";
         handle.addEventListener("mousedown", (e) => {
           e.stopPropagation();
+          e.preventDefault();
+          beginNoSelect();
           dragging = { hotspotId: h.id, target: "label", mode: "resize", startX: e.clientX, startY: e.clientY, orig: { ...h.labelRect } };
         });
         lel.appendChild(handle);
@@ -654,17 +826,31 @@ function boardIdGuess() {
   // Best-effort: look for a line like "id: some_board" in the pasted text,
   // in case the user pastes a real board.yaml instead of the plain label
   // list -- purely a convenience, not required.
-  const m = document.getElementById("boardYamlInput").value.match(/^\s*id:\s*(\S+)/m);
+  const m = rawBoardYamlText.match(/^\s*id:\s*(\S+)/m);
   return m ? m[1] : "corgi_cnc_controller";
 }
 
+/* ---------------------------------------------------------------------
+ * Output. Rects are drawn (and stored) as percentages of the ORIGINAL,
+ * UNPADDED photo -- unbounded, can go negative or past 100 to make room for
+ * a role/label box that wouldn't otherwise fit on the photo itself. That's
+ * written straight through to the YAML, no remapping: the saved image file
+ * is never padded/recomposited to match (see downloadImage(), below) --
+ * the photo is committed exactly as loaded (only downscaled if huge), and
+ * it's the CONSUMER's job (the wizard's hotspot pane) to reserve visual
+ * room for any hotspot that extends past the photo's own 0-100 bounds.
+ * This used to work the other way (pad the image, remap coordinates into
+ * the padded canvas's own space) -- reverted per direction, since it just
+ * moved complexity into the editor/export step that the wizard can absorb
+ * instead, for a real, resolution-independent, unmodified source photo.
+ * ------------------------------------------------------------------- */
 function renderOutput() {
   let y = `board_id: ${boardIdGuess()}\n`;
-  y += `image: ${document.getElementById("imgUrl").value}\n`;
+  y += `image: images/${boardIdGuess()}.jpg\n`;
   y += `hotspots:\n`;
   if (hotspots.length === 0) y += `  []\n`;
   hotspots.forEach(h => {
-    y += `  - generic_names: [${h.labels.map(l => JSON.stringify(l)).join(", ")}]\n`;
+    y += `  - generic_name: ${JSON.stringify(h.label)}\n`;
     // rect and label_rect share the same {x,y,w,h} object shape, deliberately.
     y += `    rect: {x: ${h.rect.x.toFixed(2)}, y: ${h.rect.y.toFixed(2)}, w: ${h.rect.w.toFixed(2)}, h: ${h.rect.h.toFixed(2)}}\n`;
     if (h.labelRect) {
@@ -701,21 +887,25 @@ function parseHotspotsYaml(text) {
     if ((m = line.match(/^board_id:\s*(\S+)/))) { boardId = m[1]; return; }
     if ((m = line.match(/^image:\s*(\S+)/))) { image = m[1]; return; }
     if (line === "hotspots:" || line === "[]") return;
-    // "generic_names:" is the current key; "labels:" is accepted too for
-    // backward compat with files exported before this tool (and the
-    // wizard's own hotspots.yaml consumption) switched from vendor-label
-    // vocabulary to generic-name vocabulary -- see PROGRESS.md. Either way
-    // the values loaded here ARE generic names once re-saved.
-    if ((m = line.match(/^-\s*(?:generic_names|labels):\s*\[(.*)\]/))) {
-      const labels = [];
-      const re = /"((?:[^"\\]|\\.)*)"/g;
-      let lm;
-      while ((lm = re.exec(m[1]))) labels.push(lm[1].replace(/\\"/g, '"'));
-      current = { id: nextId++, rect: { x: 0, y: 0, w: 0, h: 0 }, labels, labelRect: null, labelOrientation: "horizontal" };
+    // "generic_name:" (singular scalar) is the current key -- one hotspot,
+    // one name (see PROGRESS.md). "generic_names:"/"labels:" (the old
+    // 1-element-array shapes) are still accepted here for backward compat
+    // with files exported before this change -- only the FIRST name is kept
+    // (every real file ever had exactly one anyway); either way the value
+    // loaded here IS a generic name once re-saved.
+    if ((m = line.match(/^-\s*generic_name:\s*"((?:[^"\\]|\\.)*)"/))) {
+      current = { id: nextId++, rect: { x: 0, y: 0, w: 0, h: 0 }, label: m[1].replace(/\\"/g, '"'), labelRect: null, labelOrientation: "horizontal" };
       parsed.push(current);
       return;
     }
-    if (!current) return; // stray line before any "- generic_names:" block -- ignore
+    if ((m = line.match(/^-\s*(?:generic_names|labels):\s*\[(.*)\]/))) {
+      const re = /"((?:[^"\\]|\\.)*)"/g;
+      const lm = re.exec(m[1]);
+      current = { id: nextId++, rect: { x: 0, y: 0, w: 0, h: 0 }, label: lm ? lm[1].replace(/\\"/g, '"') : "", labelRect: null, labelOrientation: "horizontal" };
+      parsed.push(current);
+      return;
+    }
+    if (!current) return; // stray line before any "- generic_name:" block -- ignore
     if ((m = line.match(/^rect:\s*\{x:\s*([-\d.]+),\s*y:\s*([-\d.]+),\s*w:\s*([-\d.]+),\s*h:\s*([-\d.]+)\}/))) {
       current.rect = { x: parseFloat(m[1]), y: parseFloat(m[2]), w: parseFloat(m[3]), h: parseFloat(m[4]) };
       return;
@@ -756,20 +946,47 @@ function loadHotspotsFromText(text, sourceName) {
     return;
   }
   hotspots = result.hotspots;
-  if (result.image) document.getElementById("imgUrl").value = result.image;
   // Note: this doesn't touch the label textarea/board_id guess -- the
   // hotspots file only records which labels are USED, not the board's full
   // label list, so the left-pane label list stays whatever's already
-  // loaded/pasted there (boardIdGuess() still reads it independently).
-  loadImage();
+  // loaded/pasted there (boardIdGuess() still reads it independently). It
+  // also can't auto-load the referenced image (result.image is a repo-
+  // relative path, not fetchable from this standalone local tool) -- the
+  // contributor needs to separately click "Load board photo…" and pick that
+  // same image file from wherever they have it on disk.
   selectedId = null;
   drawingLabelForId = null;
   renderLabels();
   renderHotspots();
   renderOutput();
-  note.textContent = `Loaded ${result.hotspots.length} hotspot(s) from ${sourceName || "file"}.`;
+  note.textContent = `Loaded ${result.hotspots.length} hotspot(s) from ${sourceName || "file"}.`
+    + (result.image ? ` Now load its image file (was saved as ${result.image}) to continue editing visually.` : "");
   note.className = "note";
 }
+
+/* ---------------------------------------------------------------------
+ * Export the board photo exactly as loaded (already normalized -- see
+ * MAX_IMG_DIM above -- but never padded/recomposited; see renderOutput()'s
+ * comment for why). Just re-encodes the currently-displayed <img> via
+ * canvas so the download is a real file the contributor can commit to
+ * images/<id>.jpg, independent of whatever data: URL it's currently held
+ * as in memory.
+ * ------------------------------------------------------------------- */
+function downloadImage() {
+  const img = document.getElementById("boardImg");
+  if (!img.naturalWidth) { alert("Load a board photo first."); return; }
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  canvas.getContext("2d").drawImage(img, 0, 0);
+  canvas.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${boardIdGuess()}.jpg`;
+    a.click();
+  }, "image/jpeg", 0.9);
+}
+document.getElementById("downloadImgBtn").onclick = downloadImage;
 
 document.getElementById("loadBtn").onclick = () => document.getElementById("loadFileInput").click();
 document.getElementById("loadFileInput").onchange = (e) => {
@@ -781,7 +998,6 @@ document.getElementById("loadFileInput").onchange = (e) => {
   e.target.value = ""; // allow reloading the same filename twice in a row
 };
 
-document.getElementById("parseBtn").onclick = parseLabels;
 document.getElementById("copyBtn").onclick = () => navigator.clipboard.writeText(document.getElementById("output").textContent);
 document.getElementById("downloadBtn").onclick = () => {
   const blob = new Blob([document.getElementById("output").textContent], { type: "text/yaml" });
@@ -791,11 +1007,11 @@ document.getElementById("downloadBtn").onclick = () => {
   a.click();
 };
 document.getElementById("clearBtn").onclick = () => {
-  hotspots = []; selectedId = null; armed.clear(); drawingLabelForId = null;
+  hotspots = []; selectedId = null; armedLabel = null; drawingLabelForId = null;
   renderLabels(); renderHotspots(); renderOutput();
 };
 
-parseLabels();
+renderLabels();
 renderHotspots();
 renderOutput();
 </script>

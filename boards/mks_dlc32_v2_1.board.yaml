@@ -27,14 +27,34 @@ motor_sockets:
       generic_name: Motor3
       driver_class: stepstick_socket
       pins: { step_pin: i2so.3, direction_pin: i2so.4 }
+    - label: "XEXT"
+      generic_name: Driver1
+      driver_class: external_connector
+      pins: { step_pin: i2so.1, direction_pin: i2so.2 }
+    - label: "YEXT"
+      generic_name: Driver2
+      driver_class: external_connector
+      pins: { step_pin: i2so.5, direction_pin: i2so.6 }
+    - label: "ZEXT"
+      generic_name: Driver3
+      driver_class: external_connector
+      pins: { step_pin: i2so.3, direction_pin: i2so.4 }
 generic_pins:
   - { label: "X-", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: rc_filtered } }
   - { label: "Y-", generic_name: "In35", mcu_pin: gpio.35, direction: input, input_profile: { conditioning: rc_filtered } }
   - { label: "Z-", generic_name: "In34", mcu_pin: gpio.34, direction: input, input_profile: { conditioning: rc_filtered } }
-  - { label: "PROBE_PIN", generic_name: "In22", mcu_pin: gpio.22, direction: input, input_profile: { conditioning: raw } }
-  - { label: "TTL (laser PWM)", generic_name: "TTL (laser PWM)", mcu_pin: gpio.32, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "PROBE_PIN", generic_name: "In22", mcu_pin: gpio.22, direction: input, input_profile: { conditioning: rc_filtered } }
+  - { label: "TTL (laser PWM)", generic_name: "5V Out32", mcu_pin: gpio.32, direction: output, output_profile: { drive_type: totem_pole } }
   - { label: "Spindle (RPM control)", generic_name: "Spindle Out32", mcu_pin: gpio.32, direction: output, output_profile: { drive_type: mosfet_low_side } }
-  - { label: "LCD_CS", generic_name: "LCD_CS", mcu_pin: gpio.25, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "TOUCH_CS", generic_name: "TOUCH_CS", mcu_pin: gpio.26, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "LCD_RST", generic_name: "LCD_RST", mcu_pin: gpio.27, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "LCD_RS", generic_name: "In33", mcu_pin: gpio.33, direction: input, input_profile: { conditioning: raw } }
+  - { label: "LCD_CS", generic_name: "5V Out25", mcu_pin: gpio.25, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "TOUCH_CS", generic_name: "5V Out26", mcu_pin: gpio.26, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_EN", generic_name: "5V Out5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_RST", generic_name: "5V Out27", mcu_pin: gpio.27, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "SDA", generic_name: "IO0", mcu_pin: gpio.0, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "SCL", generic_name: "IO4", mcu_pin: gpio.4, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "LCD_RS", generic_name: "IO33", mcu_pin: gpio.33, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "BEEPER 5V", generic_name: "5V Out I2S7", mcu_pin: i2so.7, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "BEEPER OC", generic_name: "OC Out I2S7", mcu_pin: i2so.7, direction: output, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_MOSI", generic_name: "IO23", mcu_pin: gpio.23, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "LCD_MISO", generic_name: "IO19", mcu_pin: gpio.19, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "LCD_SCK", generic_name: "IO18", mcu_pin: gpio.18, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
