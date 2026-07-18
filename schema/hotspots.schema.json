@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/fluidnc-hotspots.schema.json",
+  "title": "FluidNC config-wizard hotspots.yaml",
+  "description": "Describes where a board's connectors/pins appear on a photo of the board, for the mapping wizard's clickable board-photo pane (index.html). One hotspots.yaml per board, named <board_id>.hotspots.yaml, authored with hotspot-editor.html (not hand-written -- see HOTSPOTS_FILE_GUIDE.md). Each hotspot's generic_name must match a generic_name written in that board's own board.yaml (see board.schema.json) -- this is the join key the wizard uses to link a clicked photo region to a resource row; a hotspots.yaml is meaningless without its board.yaml. COORDINATE MODEL (important, and non-obvious from the numbers alone): rect/label_rect coordinates are percentages of the RAW, AS-SAVED photo's own width/height (0,0 = photo's top-left corner, 100,100 = photo's bottom-right corner) -- NOT percentages of some padded/normalized canvas. Values are deliberately UNBOUNDED: a label_rect (or, less commonly, a rect) may legitimately use negative x/y or extend past 100, when a connector sits at the photo's edge and its label needs to spill outside the photo itself (e.g. a label above a connector at the very top edge uses a negative y). The wizard (index.html), not this file or the image itself, is responsible for reserving visual padding around the photo at view time so every hotspot -- including off-photo label overflow -- stays visible; the hotspot editor deliberately does NOT pad or resize the saved image to accommodate this. This is a deliberate architecture choice (see PROGRESS.md 2026-07-16/17 entries) -- earlier versions of this tool baked padding into the exported image and remapped coordinates into that padded space; that approach was reverted in favor of keeping the image untouched and pushing the padding math into the wizard, since view-time and save-time scaling look visually identical but only the former keeps hotspots.yaml simple and the source image unmodified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["board_id", "image", "hotspots"],
+  "properties": {
+    "board_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Must exactly match the board.id of the board.yaml this file describes (and thus this file's own <board_id>.hotspots.yaml filename). The wizard loads a board's hotspots.yaml by this naming convention, not by any field cross-check -- a mismatch here silently means the photo pane just won't appear."
+    },
+    "image": {
+      "type": "string",
+      "description": "Path to the board photo, relative to this file's own directory. By convention images/<board_id>.<ext> (jpg/png), matching where hotspot-editor.html writes it and where index.html expects to find it. See HOTSPOTS_FILE_GUIDE.md for image prep advice (scale to ~1000px wide before loading it into the editor)."
+    },
+    "hotspots": {
+      "type": "array",
+      "description": "One entry per clickable connector/pin region on the photo. Order is not meaningful. Every entry's generic_name should be unique within the file -- per the project's 'one hotspot, one name' rule, a genuinely dual-purpose physical pin (e.g. a pin shared between an RS485 channel and a generic output) gets one hotspot per distinct board.yaml resource/generic_name, not one hotspot covering both; if useful, draw them as adjacent/overlapping regions with their own explanatory placement rather than merging the names.",
+      "items": { "$ref": "#/$defs/hotspot" }
+    }
+  },
+  "$defs": {
+    "percentBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Left edge, percent of the raw photo's width. May be negative (box starts left of/above the photo)."
+        },
+        "y": {
+          "type": "number",
+          "description": "Top edge, percent of the raw photo's height. May be negative (box starts above the photo) -- common for label_rect boxes attached to a hotspot near the photo's top edge."
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Width, percent of the raw photo's width."
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Height, percent of the raw photo's height."
+        }
+      }
+    },
+    "hotspot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generic_name", "rect"],
+      "properties": {
+        "generic_name": {
+          "type": "string",
+          "description": "The generic_name of the board.yaml resource this region identifies (a motor_socket, generic_pin, rs485_channel, expansion_uart, or i2c_connector entry) -- the join key to that file. Must match exactly, including case."
+        },
+        "rect": {
+          "$ref": "#/$defs/percentBox",
+          "description": "The clickable region drawn directly over the connector/pin itself in the photo."
+        },
+        "label_rect": {
+          "$ref": "#/$defs/percentBox",
+          "description": "Optional. A separate box for the generic_name's text label, used when the connector is too small/crowded for the label to render legibly inside rect itself (the wizard's default behavior when label_rect is absent). Commonly placed adjacent to rect and may extend outside the photo's own 0-100 bounds (negative x/y, or x+w/y+h past 100) -- the wizard reserves padding for this at view time. When present, label_orientation should also be present."
+        },
+        "label_orientation": {
+          "type": "string",
+          "enum": ["horizontal", "vertical"],
+          "default": "horizontal",
+          "description": "Text flow direction inside label_rect. Only meaningful (and only ever written by the hotspot editor) when label_rect is present -- vertical is typically used for a narrow, tall label_rect (e.g. a label stacked above a single narrow connector) where horizontal text wouldn't fit legibly."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["label_orientation"] },
+          "then": { "required": ["label_rect"] }
+        }
+      ]
+    }
+  }
+}

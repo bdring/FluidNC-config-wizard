@@ -1,0 +1,775 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/fluidnc-board.schema.json",
+  "title": "FluidNC-compatible board description",
+  "description": "Describes the aspects of a FluidNC-compatible board that matter for writing a config.yaml for it: how MCU pins map to labeled connectors/functions, using the board's OWN label for a connector/pin (silkscreen or vendor documentation term), never an assumed FluidNC role. For example, a connector labeled 'X-' on the board is documented as exactly that -- a user may legitimately wire it to any axis's limit switch, including Z.  Companion to mcu-chip.schema.json (the lower layer: silicon/module-level GPIO facts, referenced here via board.mcu_chip) and, eventually, to fluidnc-config-schema.json in the sibling FluidNC repo (cross-checking that a generated config.yaml only uses pins this board actually exposes is a planned later phase, not implemented by this schema alone).  Design decisions worth knowing when reading this schema: - No pin-uniqueness constraint at this level. A board may legitimately offer the   same physical MCU pin for two different purposes (e.g. a GPIO appearing at both   a laser-TTL terminal and a spindle terminal) -- uniqueness only becomes a real   constraint once a specific config.yaml binds pins to FluidNC functions. - No inheritance between board variants/revisions. Each board, including each   member of a casually-named 'family' of hardware revisions, is a complete,   independent file. `family` is purely an informational grouping label. - Motor driver pins are grouped by physical socket, never split apart. A socket's   `driver_class` determines which pins it has and whether its ultimate FluidNC   motor type is fixed (onboard_fixed) or up to the config author to choose   (external_connector, stepstick_socket).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "board",
+    "stepping"
+  ],
+  "properties": {
+    "board": {
+      "$ref": "#/$defs/board_identity"
+    },
+    "meta": {
+      "$ref": "#/$defs/meta"
+    },
+    "stepping": {
+      "$ref": "#/$defs/stepping"
+    },
+    "fixed_peripherals": {
+      "$ref": "#/$defs/fixed_peripherals"
+    },
+    "motor_sockets": {
+      "$ref": "#/$defs/motor_sockets"
+    },
+    "generic_pins": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/generic_pin"
+      }
+    },
+    "expansion_sockets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/expansion_socket"
+      }
+    },
+    "rs485_channels": {
+      "type": "array",
+      "description": "RS485 buses this board exposes as a coupled tx_pin/rx_pin(/rts_pin) resource, distinct from both fixed_peripherals (which are never reassignable) and plain generic_pins (single, uncoupled pins) -- an RS485 channel is a board resource in its own right that a config author can bind to a FluidNC use, most commonly a Modbus VFD spindle (FluidNC's VFD spindle type, backed by a uartN: block using this channel's pins), though the board fact recorded here is just the bus's existence and pins, not a binding to that or any other specific FluidNC function.",
+      "items": {
+        "$ref": "#/$defs/rs485_channel"
+      }
+    },
+    "expansion_uarts": {
+      "type": "array",
+      "description": "Dedicated UART-based expansion connectors (e.g. an RJ12 jack for pendants/I-O-expansion modules like FluidDial/Airedale) whose pins/baud/mode are fixed board facts, same general shape as fixed_peripherals.dedicated_uarts -- but UNLIKE dedicated_uarts (whose pins are entirely internal and never appear in a generated config.yaml, e.g. a bus soldered straight to onboard TMC2209 chips), an expansion_uart's pins ARE meant to be written into config.yaml, as a uartN: block plus a paired uart_channelN: block, because the far end is an external, config-author-visible device rather than an onboard chip. Which uart_num a config actually uses for this is a wizard-level/config-authoring decision (conventionally uart1, or uart2 if the board also has UART-addressed onboard TMC drivers already claiming uart1 -- see motor_socket.extra.bus), not a board fact recorded here.",
+      "items": {
+        "$ref": "#/$defs/expansion_uart"
+      }
+    },
+    "i2c_connectors": {
+      "type": "array",
+      "description": "A board's I2C-capable pin pair(s), brought out to a connector, NOT a fixed_peripheral. Unlike spi/i2so (which are always consumed by an onboard peripheral that requires them), FluidNC rarely has anything onboard actually using I2C -- its only I2C-consuming feature, an OLED display, is deprecated -- so these pins are almost always just available at a connector for the config author to use or not, same category of decision as an expansion_uart connector. I2C pins are also frequently bare GPIOs with no other fixed role, so the same connector is commonly repurposed entirely as a generic UART instead (scl_pin plays the tx_pin role, sda_pin plays the rx_pin role) rather than as an actual I2C bus. Recorded here as a bindable resource: a config author may leave it unused, bind it to a real i2cN: bus, or bind it as a generic expansion UART -- which of those (if any) is a config-authoring decision, not a board fact.",
+      "items": {
+        "$ref": "#/$defs/i2c_connector"
+      }
+    }
+  },
+  "$defs": {
+    "mcu_pin": {
+      "type": "string",
+      "pattern": "^(gpio|i2so)\\.[0-9]+$",
+      "description": "Bare MCU-side pin reference: gpio.N (native GPIO) or i2so.N (I2S-expander virtual pin). No :high/:low/:pu/:pd/:dsN attributes here -- those are config-authoring/wiring choices, not board facts. Matches the pin-string vocabulary of fluidnc-config-schema.json minus its attribute suffixes."
+    },
+    "board_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "mcu_chip",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "description": "Lowercase snake_case identifier. Filename should be <id>.board.yaml."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable board name, as it's commonly known."
+        },
+        "manufacturer": {
+          "type": "string"
+        },
+        "mcu_chip": {
+          "type": "string",
+          "description": "chip_id of the chip-facts file this board uses, e.g. 'esp32'."
+        },
+        "family": {
+          "type": "string",
+          "description": "Optional, INFORMATIONAL ONLY grouping label for boards that are casually known as variants/revisions of each other (e.g. several 'MKS DLC32' boards). Has no schema or data effect -- there is no inheritance between family members; each is a complete, independent file. Purely for search/display grouping."
+        },
+        "revision": {
+          "type": "string",
+          "description": "Optional hardware revision/version string, e.g. 'V2.1', for boards that need one to disambiguate within a family."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "discontinued",
+            "unverified",
+            "community_documented"
+          ],
+          "description": "active: currently sold/supported. discontinued: no longer sold but historically valid. unverified: not yet cross-checked against a schematic/real hardware. community_documented: sourced from community reporting rather than official vendor documentation (e.g. MKS DLC32) -- treat with more caution than 'active'/'discontinued'."
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Non-technical reference information. Deliberately minimal for now; expected to grow.",
+      "properties": {
+        "wiki_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "vendor_docs_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "purchase_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "schematic_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "stepping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engines"
+      ],
+      "properties": {
+        "engines": {
+          "type": "array",
+          "description": "Ordered list of FluidNC stepping engines this board's motor pin wiring can use. First entry is preferred. A board whose motor pins are wired through I2SO (virtual pins, not real GPIOs -- see fixed_peripherals.i2so / motor socket pins using i2so.N) can ONLY use the i2s engine and will have a single-element list. A board using native GPIO throughout may list more than one, e.g. [rmt, timed], even though 'timed' is strictly worse -- the list should honestly reflect what would work, not just what's recommended. Note: I2S_STATIC and I2S_STREAM are functionally identical in FluidNC and are both represented by the single value 'i2s' here -- which specific engine string to write in a generated config.yaml is a config-authoring detail, not a board fact.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "rmt",
+              "i2s",
+              "timed",
+              "pio"
+            ]
+          },
+          "minItems": 1
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-form caveats about engine choice on real hardware, e.g. a board-specific artifact with one otherwise-equivalent engine variant that isn't a general FluidNC behavior."
+        }
+      }
+    },
+    "fixed_peripherals": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Onboard peripherals whose pins are hardwired by the board design and are NOT subject to user reassignment.",
+      "properties": {
+        "spi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "miso_pin",
+            "mosi_pin",
+            "sck_pin"
+          ],
+          "properties": {
+            "miso_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "mosi_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "sck_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "sdcard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cs_pin"
+          ],
+          "properties": {
+            "cs_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "card_detect_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "notes": {
+              "type": "string",
+              "description": "E.g. note here if the SD card shares its physical SPI bus with an onboard SPI motor driver, which can constrain usable clock frequency."
+            }
+          }
+        },
+        "i2so": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bck_pin",
+            "data_pin",
+            "ws_pin",
+            "pin_count"
+          ],
+          "properties": {
+            "bck_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "data_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "ws_pin": {
+              "$ref": "#/$defs/mcu_pin"
+            },
+            "pin_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "How many i2so.N virtual pins this board's shift-register chain actually provides. Stated explicitly per-board rather than assumed -- real-world wiki documentation has been wrong about this before."
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "dedicated_uarts": {
+          "type": "array",
+          "description": "UART buses whose physical pins are entirely hardwired to an onboard fixed driver chip (or other onboard peripheral) and are NOT available for reassignment -- e.g. a UART bus soldered directly to onboard TMC2209 chips. Distinct from a motor_socket's extra.bus field, which just names which logical uartN: a socket's config should reference; this records the actual fixed pin/baud/mode facts of that bus. A board with more than one such bus (rare) can list more than one entry.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "txd_pin",
+              "rxd_pin"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What this bus is dedicated to, e.g. 'TMC2209 UART'."
+              },
+              "txd_pin": {
+                "$ref": "#/$defs/mcu_pin"
+              },
+              "rxd_pin": {
+                "$ref": "#/$defs/mcu_pin"
+              },
+              "baud": {
+                "type": "integer",
+                "description": "Fixed baud rate, if the onboard peripheral requires a specific one."
+              },
+              "mode": {
+                "type": "string",
+                "description": "Fixed UartData mode (e.g. '8N1'), if the onboard peripheral requires a specific one."
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "motor_sockets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sockets"
+      ],
+      "properties": {
+        "shared_disable_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "Present only if ALL sockets in this file truly share one disable line (mirrors FluidNC's own axes.shared_stepper_disable_pin, which is a single global setting, not partial -- and matches FluidNC's own field name, disable_pin, not 'enable_pin'). If present, no individual socket may declare its own disable_pin. If absent, every socket must declare its own (even if some happen to coincide in practice)."
+        },
+        "shared_reset_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "Same either/or rule as shared_disable_pin, for stepstick sockets with a ganged driver RESET line."
+        },
+        "sockets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/motor_socket"
+          }
+        },
+        "notes": {
+          "type": "string",
+          "description": "Board-level note about the motor sockets as a group, e.g. a fixed total axis count."
+        }
+      }
+    },
+    "motor_socket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "driver_class",
+        "pins"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's OWN label for this socket (e.g. 'X', 'Motor1', 'M3') -- purely positional/cosmetic, not a binding to that FluidNC axis. A user may assign this socket to any axis."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "driver_class": {
+          "type": "string",
+          "enum": [
+            "external_connector",
+            "stepstick_socket",
+            "onboard_fixed"
+          ],
+          "description": "external_connector: step/dir/enable go to a connector for an off-board driver via level translation -- FluidNC motor type is always standard_stepper, chosen by the config author, not knowable from the board alone. stepstick_socket: a socket for an interchangeable driver module (A4988/DRV8825/TMC2209-standalone/etc.) -- FluidNC motor type is presumptively stepstick, though a knowledgeable user could wire a fancier module differently; current is set by a trimpot on the module, not software. onboard_fixed: a specific driver chip is soldered on and cannot be swapped -- the FluidNC motor type IS a known board fact (see fixed_motor_type). IMPORTANT ASYMMETRY: stepstick_socket does NOT preclude using an external driver instead -- pin-compatible adapter boards exist that plug into a stepstick socket and break its step/dir/disable signals out to screw terminals/headers for an off-board driver, and some boards additionally build this in as a second, dedicated connector wired to the same socket signals. Either way, this is a general property of stepstick_socket itself, not something that needs recording per board. The reverse is NOT true: external_connector genuinely precludes stepstick use -- there is no socket to plug a module into. If a specific board has a literal, dedicated second connector for the same motor position (as opposed to the generic 'a third-party adapter could exist' case), record that in this socket's notes field for now; a more structured field can be added if/when enough real boards need one to justify it."
+        },
+        "fixed_motor_type": {
+          "type": "string",
+          "description": "Required if and only if driver_class is onboard_fixed. The exact fluidnc-config-schema.json motor type name this socket's chip corresponds to, e.g. 'tmc_2209', 'tmc_5160'.",
+          "examples": [
+            "tmc_2209",
+            "tmc_5160",
+            "tmc_2130"
+          ]
+        },
+        "pins": {
+          "$ref": "#/$defs/motor_socket_pins"
+        },
+        "extra": {
+          "type": "object",
+          "description": "Driver-class-specific extra facts that aren't raw MCU pins -- e.g. {bus: uart1, addr: 0} for an onboard UART-addressed chip, or {spi_index: 1} for an SPI daisy chain position. Deliberately loosely typed for now; expected to firm up as more onboard_fixed boards are documented.",
+          "additionalProperties": true
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "driver_class": {
+                "const": "onboard_fixed"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "fixed_motor_type"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "fixed_motor_type"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Non-stepper fixed actuators (currently just rc_servo) use a single output_pin instead of step/direction_pin. Extend this enum as more onboard_fixed non-stepper types are documented (e.g. solenoid, dynamixel2).",
+          "if": {
+            "properties": {
+              "fixed_motor_type": {
+                "const": "rc_servo"
+              }
+            },
+            "required": [
+              "fixed_motor_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pins": {
+                "type": "object",
+                "required": [
+                  "output_pin"
+                ],
+                "not": {
+                  "required": [
+                    "step_pin",
+                    "direction_pin"
+                  ]
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "pins": {
+                "type": "object",
+                "required": [
+                  "step_pin",
+                  "direction_pin"
+                ],
+                "not": {
+                  "required": [
+                    "output_pin"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "motor_socket_pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Field-level requirements are NOT enforced here -- see motor_socket's allOf, which dispatches required fields based on driver_class/fixed_motor_type (a stepper-driven socket needs step_pin+direction_pin; a non-stepper fixed actuator like rc_servo needs output_pin instead).",
+      "properties": {
+        "step_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "direction_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "disable_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "Omit if this socket's disable line is covered by motor_sockets.shared_disable_pin instead."
+        },
+        "ms1_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "stepstick_socket only."
+        },
+        "ms2_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "stepstick_socket only."
+        },
+        "ms3_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "stepstick_socket only."
+        },
+        "reset_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "stepstick_socket only. Omit if covered by motor_sockets.shared_reset_pin instead."
+        },
+        "cs_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "onboard_fixed with an SPI-driven chip only."
+        },
+        "output_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "onboard_fixed with a non-stepper fixed actuator only (fixed_motor_type: rc_servo/solenoid/etc.) -- a single PWM/signal pin instead of step/direction."
+        }
+      }
+    },
+    "input_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conditioning"
+      ],
+      "properties": {
+        "conditioning": {
+          "type": "string",
+          "enum": [
+            "raw",
+            "opto_isolated",
+            "rc_filtered",
+            "level_shifted",
+            "comparator"
+          ],
+          "description": "raw: bare MCU GPIO with at most internal/board pull resistors, nothing else in the signal path. opto_isolated / rc_filtered / level_shifted / comparator: real signal-conditioning circuitry between the connector and the MCU pin."
+        },
+        "external_pullup_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if the circuit expects an external pull resistor (e.g. for an open-collector/NPN sensor) that the board does not itself provide."
+        },
+        "voltage_max": {
+          "type": "number",
+          "description": "Maximum safe input voltage this circuit tolerates, if higher than plain 3.3V logic (relevant for opto-isolated/level-shifted inputs)."
+        }
+      }
+    },
+    "output_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "drive_type"
+      ],
+      "properties": {
+        "drive_type": {
+          "type": "string",
+          "enum": [
+            "totem_pole",
+            "open_collector",
+            "mosfet_low_side",
+            "mosfet_high_side",
+            "relay",
+            "h_bridge"
+          ],
+          "description": "totem_pole: standard push-pull logic output. open_collector: sinks only, needs an external pull-up. mosfet_low_side / mosfet_high_side: switches load to ground / to supply, respectively. relay: mechanical contact. h_bridge: bidirectional drive (e.g. HBridge spindle output)."
+        },
+        "voltage_max": {
+          "type": "number",
+          "description": "Maximum voltage this output can switch/drive."
+        },
+        "current_max_a": {
+          "type": "number",
+          "description": "Maximum current this output can source/sink."
+        }
+      }
+    },
+    "generic_pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "mcu_pin",
+        "direction"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's OWN label for this connector/pin (silkscreen or vendor documentation term), e.g. 'X-', 'Coolant', 'Probe'. Not a binding to that FluidNC function -- purely positional/cosmetic."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "mcu_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "input",
+            "output",
+            "bidirectional",
+            "either"
+          ],
+          "description": "input/output: fixed, single-purpose pin. bidirectional: driven and read as a single shared signal, both directions active at once (e.g. a true I2C SDA line, or any other genuinely open-drain shared-wire signal) -- input_profile and output_profile together describe that one shared electrical path. either: a bare, uncommitted GPIO that a config author can choose to use as EITHER a plain input OR a plain output (never both at once) -- e.g. a repurposable pin broken out to a header with no fixed onboard role. Also requires both input_profile and output_profile, but here they describe two independent, mutually-exclusive uses rather than one shared signal; note this in the entry's notes if worth clarifying further."
+        },
+        "input_profile": {
+          "$ref": "#/$defs/input_profile"
+        },
+        "output_profile": {
+          "$ref": "#/$defs/output_profile"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "direction": {
+                "const": "input"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "input_profile"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "direction": {
+                "const": "output"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "output_profile"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "direction": {
+                "enum": ["bidirectional", "either"]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "input_profile",
+              "output_profile"
+            ]
+          }
+        }
+      ]
+    },
+    "expansion_socket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "pins"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's own label for this general-purpose expansion/module socket, distinct from a motor_socket -- e.g. a pluggable I/O module header."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "pinout_class": {
+          "type": "string",
+          "description": "Optional shared identifier for a common connector pinout used across multiple boards/modules (e.g. a subset-compatible family of module headers), purely informational."
+        },
+        "pins": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "module_pin",
+              "mcu_pin",
+              "direction"
+            ],
+            "properties": {
+              "module_pin": {
+                "type": "string",
+                "description": "The connector's own pin identifier (number or label)."
+              },
+              "mcu_pin": {
+                "$ref": "#/$defs/mcu_pin"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "input",
+                  "output",
+                  "bidirectional",
+                  "either"
+                ],
+                "description": "See generic_pin.direction for the bidirectional vs. either distinction (shared single signal vs. a config-author's choice of one or the other)."
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "rs485_channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "tx_pin",
+        "rx_pin"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's own label for this RS485/Modbus bus (e.g. 'RS485', 'Modbus'). Purely positional/cosmetic, not a binding to any particular FluidNC use."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "tx_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "rx_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "rts_pin": {
+          "$ref": "#/$defs/mcu_pin",
+          "description": "Optional. Present only if this bus has a dedicated, MCU-driven direction/driver-enable pin for the RS485 transceiver. Many boards (e.g. those built around a MAX3485 wired for automatic direction sensing, or simple half-duplex TX/RX with no software direction control) have no separate RTS pin at all -- omit rather than guessing one."
+        },
+        "pins_reusable_as_generic_io": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if, when this channel is not used for RS485, its tx_pin/rx_pin can individually be wired/used as plain digital I/O instead (as documented for some boards, where the same physical terminal doubles as a 5V logic output/input when the RS485 transceiver isn't in use). This is a fact about the physical circuit -- if true, the same mcu_pin(s) may also legitimately appear in this board's generic_pins, per this schema's general no-pin-uniqueness-at-this-level design (see top-level description)."
+        },
+        "notes": {
+          "type": "string",
+          "description": "E.g. which transceiver chip is used (affects voltage/isolation characteristics and real-world direction-control behavior)."
+        }
+      }
+    },
+    "expansion_uart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "txd_pin",
+        "rxd_pin"
+      ],
+      "description": "No rts_pin/cts_pin fields -- confirmed against real vendor documentation (both the Corgi and 4x wiki pages' own example config for this exact connector) that this physical connector (a 2-wire-data RJ12/similar jack) never carries RTS/CTS lines at all; a generated config.yaml should write literal NO_PIN for both rather than this schema pretending they might sometimes be real pins, unlike rs485_channel's genuinely-sometimes-present rts_pin.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's own label for this connector, e.g. 'RJ12 Expansion'."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "connector_type": {
+          "type": "string",
+          "description": "Optional physical connector type, e.g. 'RJ12'. Purely informational."
+        },
+        "txd_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "rxd_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "baud": {
+          "type": "integer",
+          "description": "Fixed baud rate required by the expansion protocol (e.g. 1000000 for FluidNC's own pendant/expander protocol)."
+        },
+        "mode": {
+          "type": "string",
+          "description": "Fixed UartData mode, e.g. '8N1'."
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "i2c_connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "sda_pin",
+        "scl_pin"
+      ],
+      "description": "A board's I2C-capable pin pair, brought out to a connector -- see the top-level i2c_connectors field for why this is bindable rather than a fixed_peripheral. No baud/mode/notes-required fields for the bus itself: unlike expansion_uart (whose far end is always the same fixed protocol), this connector's actual use (real I2C bus vs. repurposed generic UART, vs. left alone) is entirely a config-authoring decision.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "The board's own label for this connector, e.g. 'I2C', 'OLED'."
+        },
+        "generic_name": {
+          "type": "string",
+          "description": "Normalized, vendor-independent name for this connector/pin, used by tools (e.g. the mapping wizard) to present a consistent vocabulary across boards instead of each board's own silkscreen/vendor label. Algorithmic per a fixed naming scheme (e.g. plain digital inputs are \"In<pin>\", 5V push-pull outputs \"5V Out<pin>\", MOSFET low-side outputs \"FET<pin>\", open-collector outputs \"OC Out<pin>\", onboard-driven motor sockets \"Motor<N>\", external-driver headers \"Driver<N>\", spindle-control digital outputs \"Spindle Out<pin>\", the board's 10V analog spindle output \"Spindle 10V\"). \"<pin>\" is the mcu_pin number/identifier: a plain gpio.N pin is written as just N with no separator (e.g. \"FET4\" for gpio.4). An i2so.N pin (the Nth, 0-indexed, pin of the I2S shift-register chain) is written as I2SN, WITH a preceding space before it, unlike the bare-number gpio case (e.g. \"OC Out I2S7\", not \"OC OutI2S7\", for i2so.7 -- the space keeps the rendered label legible) -- needed for any board whose auxiliary outputs are wired through the I2S chain rather than a native GPIO, e.g. some 6-pack-family boards' extra I2SO-driven outputs. Optional -- omit (or set equal to label) for a connector/pin whose generic naming convention hasn't been pinned down yet; a tool should fall back to label in that case."
+        },
+        "sda_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "scl_pin": {
+          "$ref": "#/$defs/mcu_pin"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

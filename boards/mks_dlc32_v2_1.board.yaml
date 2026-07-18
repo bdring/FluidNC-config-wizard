@@ -11,7 +11,7 @@ fixed_peripherals:
   sdcard: { cs_pin: gpio.15, card_detect_pin: gpio.39 }
   i2so: { bck_pin: gpio.16, data_pin: gpio.21, ws_pin: gpio.17, pin_count: 8 }
 i2c_connectors:
-  - { label: "I2C", sda_pin: gpio.0, scl_pin: gpio.4 }
+  - { label: "I2C", generic_name: "I2C", sda_pin: gpio.0, scl_pin: gpio.4 }
 motor_sockets:
   shared_disable_pin: i2so.0
   sockets:
@@ -50,11 +50,11 @@ generic_pins:
   - { label: "TOUCH_CS", generic_name: "5V Out26", mcu_pin: gpio.26, direction: output, output_profile: { drive_type: totem_pole } }
   - { label: "LCD_EN", generic_name: "5V Out5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: totem_pole } }
   - { label: "LCD_RST", generic_name: "5V Out27", mcu_pin: gpio.27, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "SDA", generic_name: "IO0", mcu_pin: gpio.0, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
-  - { label: "SCL", generic_name: "IO4", mcu_pin: gpio.4, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
-  - { label: "LCD_RS", generic_name: "IO33", mcu_pin: gpio.33, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "SDA", generic_name: "IO0", mcu_pin: gpio.0, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+  - { label: "SCL", generic_name: "IO4", mcu_pin: gpio.4, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_RS", generic_name: "IO33", mcu_pin: gpio.33, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
   - { label: "BEEPER 5V", generic_name: "5V Out I2S7", mcu_pin: i2so.7, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "BEEPER OC", generic_name: "OC Out I2S7", mcu_pin: i2so.7, direction: output, output_profile: { drive_type: totem_pole } }
-  - { label: "LCD_MOSI", generic_name: "IO23", mcu_pin: gpio.23, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
-  - { label: "LCD_MISO", generic_name: "IO19", mcu_pin: gpio.19, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
-  - { label: "LCD_SCK", generic_name: "IO18", mcu_pin: gpio.18, direction: io, input_profile: { conditioning: raw }, output_profile: { drive_type: gpio } }
+  - { label: "BEEPER OC", generic_name: "OC Out I2S7", mcu_pin: i2so.7, direction: output, output_profile: { drive_type: open_collector } }
+  - { label: "LCD_MOSI", generic_name: "IO23", mcu_pin: gpio.23, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_MISO", generic_name: "IO19", mcu_pin: gpio.19, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+  - { label: "LCD_SCK", generic_name: "IO18", mcu_pin: gpio.18, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
