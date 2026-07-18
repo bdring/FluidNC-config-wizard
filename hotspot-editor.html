@@ -31,6 +31,15 @@
   .layout { display: grid; grid-template-columns: 260px 1fr 320px; gap: 0; height: calc(100vh - 45px); }
   .col { overflow: auto; padding: 10px 14px; border-right: 1px solid var(--border); }
   .col:last-child { border-right: none; }
+  /* The middle (board image) column needs its Load/zoom controls to stay
+     put even when the image itself is scrolled around at high zoom -- a
+     plain .col's own overflow:auto would happily scroll them out of view
+     along with everything else. Instead this column is a flex column with
+     a non-scrolling header (.imgcol-header) and a separately-scrolling body
+     (.imgcol-body) that holds #imgWrap; only the body scrolls. */
+  .imgcol { overflow: hidden; padding: 0; display: flex; flex-direction: column; }
+  .imgcol-header { flex: 0 0 auto; padding: 10px 14px 0; }
+  .imgcol-body { flex: 1 1 auto; overflow: auto; padding: 0 14px 14px; }
   .label-row {
     display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; font-size: 12.5px;
   }
@@ -80,11 +89,31 @@
     border: 2px dashed #c98fe0; background: rgba(201,143,224,.14); cursor: move;
   }
   .rect.label-rect .tag { background: #c98fe0; }
-  .rect.label-rect .del { top: auto; bottom: -18px; }
-  .rect.label-rect.armed-for-draw { outline: 2px solid #c98fe0; outline-offset: 2px; }
+  /* del stays at the base .rect .del position (top-right) rather than being
+     pushed to the bottom row -- on a narrow label box, a bottom-row del
+     (right-anchored) and .orient-btn (left-anchored, wider text) could
+     overlap and leave the del button unreachable underneath orient-btn. */
+  /* Lives INSIDE the box, centered -- both because that's roughly where the
+     actual label text will end up once rendered for real (this box's whole
+     purpose), and because centering (rather than the earlier bottom-left
+     corner placement) keeps it clamped to the box's own width/height no
+     matter how small the box is, so it can never reach the resize handle
+     just outside the box's bottom-right edge. */
   .rect.label-rect .orient-btn {
-    position: absolute; bottom: -18px; left: -2px; background: #c98fe0; color: #0b1114;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: #c98fe0; color: #0b1114;
     font-size: 10px; line-height: 14px; padding: 0 4px; border-radius: 3px; cursor: pointer;
+    white-space: nowrap; max-width: calc(100% - 4px); overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Oriented to match the label's own current text-flow state, same
+     writing-mode/rotate technique the wizard itself uses for a vertical
+     role label -- doubles as a visual preview of what "vertical" will
+     actually look like, and is naturally narrower, which helps on exactly
+     the narrow boxes where this control used to cause trouble. */
+  .rect.label-rect .orient-btn.vertical {
+    writing-mode: vertical-rl; text-orientation: mixed;
+    transform: translate(-50%, -50%) rotate(180deg);
+    padding: 4px 0; max-width: none; max-height: calc(100% - 4px);
   }
   pre#output {
     font-size: 11px; font-family: ui-monospace, monospace; white-space: pre-wrap; word-break: break-word;
@@ -116,26 +145,30 @@
     <div id="labelList"></div>
   </div>
 
-  <div class="col" style="border-right:1px solid var(--border)">
-    <h2>Board image</h2>
-    <div class="toolbar" style="padding:0 0 6px; border:none">
-      <button id="loadImgFileBtn">Load board photo…</button>
-      <input type="file" id="loadImgFileInput" accept="image/*" style="display:none">
-    </div>
-    <div class="note" id="imgLoadNote" style="padding:0 0 6px">Load a local image file to begin. It's normalized (downscaled/recompressed) automatically -- nothing is fetched from a URL.</div>
-    <div class="toolbar" style="padding:0 0 6px; border:none">
-      <button id="zoomOutBtn">−</button>
-      <span class="note" id="zoomLabel" style="padding:0 4px">100%</span>
-      <button id="zoomInBtn">+</button>
-      <button id="zoomResetBtn">Reset zoom</button>
-      <span class="note" style="padding:0 0 0 8px">or Ctrl/⌘+scroll over the image</span>
-    </div>
-    <div class="note" style="padding:0 0 8px" id="drawHint">Pick a label on the left, then click-drag on the image to draw a rectangle.</div>
-    <div id="imgWrap">
-      <div id="imgPad">
-        <img id="boardImg" src="" alt="board photo">
+  <div class="col imgcol" style="border-right:1px solid var(--border)">
+    <div class="imgcol-header">
+      <h2>Board image</h2>
+      <div class="toolbar" style="padding:0 0 6px; border:none">
+        <button id="loadImgFileBtn">Load board photo…</button>
+        <input type="file" id="loadImgFileInput" accept="image/*" style="display:none">
+        <span style="margin-left:auto; display:flex; align-items:center; gap:8px">
+          <button id="zoomOutBtn">−</button>
+          <span class="note" id="zoomLabel" style="padding:0 4px">100%</span>
+          <button id="zoomInBtn">+</button>
+          <button id="zoomResetBtn">Reset zoom</button>
+          <span class="note" style="padding:0 0 0 8px">or Ctrl/⌘+scroll over the image</span>
+        </span>
       </div>
-      <div id="overlay"></div>
+      <div class="note" id="imgLoadNote" style="padding:0 0 6px">Load a local image file to begin. It's normalized (downscaled/recompressed) automatically -- nothing is fetched from a URL.</div>
+      <div class="note" style="padding:0 0 8px" id="drawHint">Pick a label on the left, then click-drag on the image to draw a rectangle.</div>
+    </div>
+    <div class="imgcol-body">
+      <div id="imgWrap">
+        <div id="imgPad">
+          <img id="boardImg" src="" alt="board photo">
+        </div>
+        <div id="overlay"></div>
+      </div>
     </div>
   </div>
 
@@ -464,9 +497,10 @@ document.getElementById("zoomInBtn").onclick = () => setZoom(zoomLevel * ZOOM_ST
 document.getElementById("zoomOutBtn").onclick = () => setZoom(zoomLevel / ZOOM_STEP);
 document.getElementById("zoomResetBtn").onclick = () => setZoom(1);
 
-// Ctrl/Cmd+scroll to zoom, centered roughly where the cursor is (scrolls the
-// .col to keep the point under the cursor in place). Plain scroll is left
-// alone so normal trackpad/wheel panning of the .col still works.
+// Ctrl/Cmd+scroll to zoom, centered roughly where the cursor is (scrolls
+// .imgcol-body, the scrolling region around #imgWrap, to keep the point
+// under the cursor in place). Plain scroll is left alone so normal
+// trackpad/wheel panning of .imgcol-body still works.
 // NOTE: uses getElementById() rather than the `overlay` const below, since
 // this code runs (script top-level, in order) BEFORE that const's own
 // declaration line executes -- referencing it here would hit the temporal
@@ -475,7 +509,7 @@ document.getElementById("overlay").addEventListener("wheel", (e) => {
   if (!e.ctrlKey && !e.metaKey) return;
   e.preventDefault();
   const ov = document.getElementById("overlay");
-  const col = ov.closest(".col");
+  const col = ov.closest(".imgcol-body");
   const before = ov.getBoundingClientRect();
   const cursorPctX = (e.clientX - before.left) / before.width;
   const cursorPctY = (e.clientY - before.top) / before.height;
@@ -625,7 +659,14 @@ document.addEventListener("mouseup", (e) => {
             x: snapPct((left - off.left) / off.width * 100), y: snapPct((top - off.top) / off.height * 100),
             w: snapPct(w / off.width * 100), h: snapPct(h / off.height * 100),
           };
-          if (!h2.labelOrientation) h2.labelOrientation = "horizontal";
+          // Initial orientation follows the aspect ratio of the box as
+          // drawn (taller than wide -> vertical text is presumably the
+          // intent) -- this only runs here, at label-box CREATION time (the
+          // "+ label box" control only exists when there's no labelRect
+          // yet, see its render code below), never re-evaluated when the
+          // box is later resized via its handle; after creation, only the
+          // explicit orient-btn toggle changes it.
+          h2.labelOrientation = h > w ? "vertical" : "horizontal";
           selectedId = h2.id;
         }
       } else {
@@ -726,23 +767,27 @@ function renderHotspots() {
       });
       el.appendChild(handle);
 
-      // "Draw/redraw label box" button: arms drawingLabelForId so the NEXT
-      // drag on the overlay places (or replaces) this hotspot's labelRect,
-      // rather than creating a new connector hotspot.
-      const labelBtn = document.createElement("div");
-      labelBtn.className = "label-btn";
-      labelBtn.textContent = h.labelRect ? "redraw label" : "+ label box";
-      labelBtn.addEventListener("mousedown", (e) => e.stopPropagation());
-      labelBtn.onclick = (e) => {
-        e.stopPropagation();
-        drawingLabelForId = (drawingLabelForId === h.id) ? null : h.id;
-        document.getElementById("drawHint").textContent = drawingLabelForId === h.id
-          ? "Drag on the image to place this hotspot's label box."
-          : "Pick a label on the left before drawing a rectangle.";
-        document.getElementById("drawHint").className = drawingLabelForId === h.id ? "warn" : "note";
-        renderHotspots();
-      };
-      el.appendChild(labelBtn);
+      // "+ label box" button: arms drawingLabelForId so the NEXT drag on the
+      // overlay places this hotspot's labelRect, rather than creating a new
+      // connector hotspot. Only offered when there's no labelRect yet --
+      // once one exists, it has its own move/resize/delete handles (below)
+      // for adjusting it in place; there's no separate "redraw" affordance.
+      if (!h.labelRect) {
+        const labelBtn = document.createElement("div");
+        labelBtn.className = "label-btn";
+        labelBtn.textContent = "+ label box";
+        labelBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+        labelBtn.onclick = (e) => {
+          e.stopPropagation();
+          drawingLabelForId = (drawingLabelForId === h.id) ? null : h.id;
+          document.getElementById("drawHint").textContent = drawingLabelForId === h.id
+            ? "Drag on the image to place this hotspot's role box."
+            : "Pick a label on the left before drawing a rectangle.";
+          document.getElementById("drawHint").className = drawingLabelForId === h.id ? "warn" : "note";
+          renderHotspots();
+        };
+        el.appendChild(labelBtn);
+      }
     }
     overlay.appendChild(el);
 
@@ -752,8 +797,7 @@ function renderHotspots() {
     // anywhere on the photo, independent of the connector's own position.
     if (h.labelRect) {
       const lel = document.createElement("div");
-      lel.className = "rect hotspot label-rect" + (h.id === selectedId ? " selected" : "")
-        + (drawingLabelForId === h.id ? " armed-for-draw" : "");
+      lel.className = "rect hotspot label-rect" + (h.id === selectedId ? " selected" : "");
       const lpx = pctToPx(h.labelRect);
       Object.assign(lel.style, {
         left: lpx.left + "px", top: lpx.top + "px",
@@ -761,7 +805,7 @@ function renderHotspots() {
       });
       const ltag = document.createElement("div");
       ltag.className = "tag";
-      ltag.textContent = h.label + (h.labelOrientation === "vertical" ? " (V)" : "");
+      ltag.textContent = h.label;
       lel.appendChild(ltag);
 
       lel.addEventListener("mousedown", (e) => {
@@ -797,8 +841,8 @@ function renderHotspots() {
         lel.appendChild(handle);
 
         const orientBtn = document.createElement("div");
-        orientBtn.className = "orient-btn";
-        orientBtn.textContent = h.labelOrientation === "vertical" ? "↕ vertical" : "↔ horizontal";
+        orientBtn.className = "orient-btn" + (h.labelOrientation === "vertical" ? " vertical" : "");
+        orientBtn.textContent = h.labelOrientation === "vertical" ? "vertical" : "horizontal";
         orientBtn.addEventListener("mousedown", (e) => e.stopPropagation());
         orientBtn.onclick = (e) => {
           e.stopPropagation();
