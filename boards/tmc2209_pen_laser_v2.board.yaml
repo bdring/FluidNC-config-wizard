@@ -19,19 +19,7 @@ meta:
     be on for USB to enumerate -- no reverse-polarity protection). Onboard
     ESP32 module, 2x onboard TMC2209 UART stepper drivers (max ~2.0A,
     optional StallGuard sensorless homing), microSD socket, I/O expansion
-    port for a display/pendant. All facts below transcribed from the wiki
-    page's prose and its own default/example config.yaml (both cited
-    inline) -- the wiki's pinout diagram is an image only (not machine-
-    readable from this session), so exact CONNECTOR SILKSCREEN TEXT for the
-    generic inputs/outputs below is inferred from the example config's own
-    field usage (e.g. "the pin the example config binds as probe_pin")
-    rather than read directly off the board. Cross-check against the
-    pinout image (http://wiki.fluidnc.com/hardware/2x_2209_v2_pinout.png)
-    or real hardware before treating those specific label strings as
-    authoritative silkscreen text. The top-of-board photo used on the wiki
-    page is filed as "tmc2209_penlaser_2p1_top.jpg", suggesting an internal
-    PCB revision of "2.1" under the "V2" product name -- noted here in case
-    a later hardware revision needs disambiguating from this file.
+    port for a display/pendant.
 
 stepping:
   engines: [rmt, timed]
@@ -44,7 +32,6 @@ fixed_peripherals:
     sck_pin: gpio.18
   sdcard:
     cs_pin: gpio.5
-    notes: "Wiki's own example config explicitly sets card_detect_pin: NO_PIN -- this board has no physical card-detect wire, not merely an unconfirmed one."
   dedicated_uarts:
     - label: "TMC2209 UART"
       txd_pin: gpio.17
@@ -53,23 +40,19 @@ fixed_peripherals:
       mode: "8N1"
       notes: >
         Single UART bus, entirely internal, addressing BOTH onboard
-        TMC2209 chips (X at addr 0, Y at addr 1) -- confirmed via the
-        wiki's own example config (uart1: txd_pin gpio.17/rxd_pin gpio.16,
-        referenced by both X's and Y's tmc_2209.uart_num: 1 with distinct
-        addr values).
+        TMC2209 chips (X at addr 0, Y at addr 1)
 
 motor_sockets:
   shared_disable_pin: gpio.13
-  notes: "Wiki's own example config: axes.shared_stepper_disable_pin: gpio.13:high -- both TMC2209-driven axes share this one disable line; no per-socket disable_pin."
   sockets:
-    - label: "X"
+    - label: "X Motor"
       generic_name: Motor1
       driver_class: onboard_fixed
       fixed_motor_type: tmc_2209
       pins: { step_pin: gpio.14, direction_pin: gpio.12 }
       extra: { bus: uart1, addr: 0 }
       notes: "Limit input gpio.36 is wired to this axis in the example config; see generic_pins."
-    - label: "Y"
+    - label: "Y Motor"
       generic_name: Motor2
       driver_class: onboard_fixed
       fixed_motor_type: tmc_2209
@@ -83,23 +66,11 @@ motor_sockets:
       pins: { output_pin: gpio.21 }
       notes: >
         Standard RC servo connector, typically used for a pen-lift
-        mechanism. Wiki, verbatim: "If you don't use an RC Servo, you can
-        use the signal pin as a 5V output signal" -- gpio.21 is therefore
-        also recorded below as a plain 5V output (generic_pins), per this
-        schema's documented no-pin-uniqueness design for a board fact that
-        genuinely serves two purposes depending on how it's wired/used.
+        mechanism. If you don't use an RC Servo, you can
+        use the signal pin as a 5V output signal. gpio.21 is therefore
+        also recorded below as a plain 5V output (generic_pins)
 
 generic_pins:
-  # 4-pin control/limit terminal block (per wiki: "Inputs gpio.32, gpio.33,
-  # gpio.34 and gpio.35 are used with the 8 pin terminal block"). Function
-  # names below are the roles the wiki's own example config binds each pin
-  # to (probe / safety door / cycle start / feed hold), not confirmed
-  # silkscreen text -- see the board-level notes caveat.
-  - { label: "Probe (example config: probe.pin)", generic_name: "In32", mcu_pin: gpio.32, direction: input, input_profile: { conditioning: raw, external_pullup_required: false } }
-  - { label: "Safety Door (example config: control.safety_door_pin)", generic_name: "In33", mcu_pin: gpio.33, direction: input, input_profile: { conditioning: raw, external_pullup_required: false } }
-  - { label: "Cycle Start (example config: control.cycle_start_pin)", generic_name: "In34", mcu_pin: gpio.34, direction: input, input_profile: { conditioning: raw, external_pullup_required: false } }
-  - { label: "Feed Hold (example config: control.feed_hold_pin)", generic_name: "In35", mcu_pin: gpio.35, direction: input, input_profile: { conditioning: raw, external_pullup_required: false } }
-
   # X/Y limit inputs, shipped by default configured for StallGuard
   # sensorless homing instead of the usual physical-switch terminal block.
   # Wiki, verbatim: "Inputs gpio.36 and gpio.39 ship setup for use with
@@ -110,24 +81,29 @@ generic_pins:
   # pull is what's being removed (an external one may then be needed
   # depending on the switch used, but that's a wiring-choice detail, not a
   # fixed board fact recorded here).
-  - { label: "X Limit / StallGuard", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: raw, external_pullup_required: false }, notes: "SJ1-populated by default for StallGuard use; unsolder SJ1 to use the physical limit terminal instead." }
-  - { label: "Y Limit / StallGuard", generic_name: "In39", mcu_pin: gpio.39, direction: input, input_profile: { conditioning: raw, external_pullup_required: false }, notes: "SJ2-populated by default for StallGuard use; unsolder SJ2 to use the physical limit terminal instead." }
+  - { label: "Inputs - 36 XLim / StallGuard", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false }, notes: "SJ1-populated by default for StallGuard use; unsolder SJ1 to use the physical limit terminal instead." }
+  - { label: "Inputs - 39 YLim / StallGuard", generic_name: "In39", mcu_pin: gpio.39, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false }, notes: "SJ2-populated by default for StallGuard use; unsolder SJ2 to use the physical limit terminal instead." }
 
-  # 3x 5V outputs ("3 5V outputs to control lasers, and accessories" per
-  # wiki features list) -- function names below are the wiki's own example
-  # config usage (coolant mist / Laser PWM / Laser enable), not confirmed
-  # silkscreen text -- see the board-level notes caveat.
-  - { label: "5V Out (example config: coolant.mist_pin)", generic_name: "5V Out22", mcu_pin: gpio.22, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
-  - { label: "5V Out (example config: Laser.output_pin, PWM)", generic_name: "5V Out27", mcu_pin: gpio.27, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
-  - { label: "5V Out (example config: Laser.enable_pin)", generic_name: "5V Out2", mcu_pin: gpio.2, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
+  - { label: "Inputs - 35", generic_name: "In35", mcu_pin: gpio.35, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false } }
+  - { label: "Inputs - 34", generic_name: "In34", mcu_pin: gpio.34, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false } }
+  - { label: "Inputs - 33", generic_name: "In33", mcu_pin: gpio.33, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false } }
+  - { label: "Inputs - 32", mcu_pin: gpio.32, direction: input, input_profile: { conditioning: rc_filtered, external_pullup_required: false } }
 
-  # RC servo signal pin, reusable as a plain 5V output per the wiki's own
-  # statement quoted in the Z motor socket's notes above -- same physical
-  # gpio.21 as that socket's output_pin.
-  - { label: "RC Servo signal (reusable as 5V output)", generic_name: "5V Out21", mcu_pin: gpio.21, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 }, notes: "Shares gpio.21 with the Z motor socket's rc_servo output_pin -- usable as one or the other, not both." }
+  # 3x 5V outputs ("3 5V outputs to control lasers and accessories"
+  - { label: "Outputs - 22", generic_name: "5V Out22", mcu_pin: gpio.22, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
+  - { label: "Outputs - 27", generic_name: "5V Out27", mcu_pin: gpio.27, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
+  - { label: "Outputs - 2", generic_name: "5V Out2", mcu_pin: gpio.2, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 } }
 
+  # RC servo signal pin on gpio.21, reusable as a plain 5V output
+  - { label: "RC Servo (as 5V output)", generic_name: "5V Out21", mcu_pin: gpio.21, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0 }, notes: "Shares gpio.21 with the Z motor socket's rc_servo output_pin -- usable as one or the other, not both." }
+
+  # Module pins separated out for general purpose use
+  - { label: "I/O Expander - 4", generic_name: "IO4", mcu_pin: gpio.4, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+  - { label: "I/O Expander - 15", generic_name: "IO15", mcu_pin: gpio.15, direction: either, input_profile: { conditioning: raw }, output_profile: { drive_type: totem_pole } }
+
+# Module pins for use with an I/O Expander module
 expansion_uarts:
-  - label: "I/O Expansion Port"
+  - label: "I/O Expander"
     generic_name: "Expander"
     connector_type: "CNC I/O module header (2 of the usual 4 I/O pins wired)"
     txd_pin: gpio.4
@@ -138,14 +114,4 @@ expansion_uarts:
       Wiki: "typically used to connect a display or pendant via a UART
       connection... uses the standard pinout for CNC I/O module, but there
       are only 2 I/O pins instead of the normal 4... may need to clip some
-      unused pins to avoid touching components." Baud is unusually high
-      (5000000, not the more common 1000000 used by some other FluidNC
-      boards' pendant ports) -- confirmed via the wiki's own example
-      config's uart2: block, not a guess. Wiki also states these 2 pins
-      "are directly connected to the ESP32, so they can be used for just
-      about any I/O function" -- i.e. genuinely reusable as generic I/O
-      when the expansion port isn't in use, similar in spirit to an
-      rs485_channel's pins_reusable_as_generic_io (no equivalent field
-      exists on expansion_uart in this schema yet); not duplicated into
-      generic_pins here since the wiki gives no specific alternate
-      function name to record, unlike the RC servo/5V-out case above.
+      unused pins to avoid touching components."
