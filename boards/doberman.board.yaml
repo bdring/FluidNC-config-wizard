@@ -17,39 +17,15 @@ meta:
     12V main supply (reverse-polarity protected, unlike some other Dring
     boards), primary USB-C (CP2102) for programming/serial, secondary
     native USB-C ("USB CDC", experimental, direct to the ESP32-S3's fixed
-    USB_D-/USB_D+ silicon pins -- see chips/esp32s3.chip.yaml -- not
-    separately modeled as a board fixed_peripheral since this schema has no
-    dedicated native-USB slot). Current version is V1.0 (wiki has no V1.1+
-    yet, unlike e.g. BTT Rodent).
+    USB_D-/USB_D+ silicon pins -- see chips/esp32s3.chip.yaml
 
-    Known gaps in this file, deliberately left unfilled rather than
-    guessed: (1) the center "CNC I/O module socket" is real and documented
-    in prose (accepts any standard CNC I/O module) but its individual pin
-    assignments are only shown in a schematic image, not enumerated in the
-    wiki's text -- not modeled as an expansion_socket here; cross-check the
-    schematic before assuming specific pins. (2) the probe/toolsetter
-    inputs (gpio.47/gpio.3 below) appear only in the wiki's full example
-    config, with no accompanying prose hardware description (unlike the
-    switch-input connectors, which get a full circuit writeup) -- their
-    input_profile below is a best-effort guess, not confirmed. (3) the
-    wiki's RS485 section says the TX LED is "labeled io15" on the silkscreen,
-    but the wiki's own RS485 example config uses gpio.12 as txd_pin -- this
-    file follows the example config (the more concrete, directly-usable
-    source) and treats the "io15" LED-label mention as either a stale
-    silkscreen leftover or referring to something else entirely; flagged
-    here rather than silently reconciled. (4) the wiki's commented-out
-    example "Laser:" config block references gpio.44, which appears nowhere
-    else on this page and isn't one of the 4 confirmed 5V outputs
-    (gpio.4/5/45/46) -- likely leftover template cruft copy-pasted from a
-    different board's example; NOT recorded as a board fact here.
-
-    Also corrected here: the wiki's own motor pin-map table labels the 8th
-    motor connector "motor C" (a literal duplicate of the 6th connector's
-    label) -- the features list elsewhere on the same page states the 8
-    connectors are "labeled XYZACBUV", so the 8th is almost certainly V,
-    not a second C. This file uses Motor7/Motor8 generic names either way
-    (letter labels aren't used, see motor_sockets below), so the typo only
-    affects this note, not any actual field value.
+    Known gap in this file, deliberately left unfilled rather than
+    guessed: the center "CNC I/O module socket" is real and
+    documented in prose (accepts any standard CNC I/O module) but its
+    individual pin assignments are only shown in a schematic image,
+    not enumerated in the wiki's text -- not modeled as an
+    expansion_socket here; cross-check the schematic before assuming
+    specific pins.
 
 stepping:
   engines: [i2s]
@@ -78,42 +54,42 @@ motor_sockets:
     hence label "Motor1".."Motor8" (not the silkscreen letters) to match
     that established convention rather than implying a fixed axis binding.
   sockets:
-    - label: "Motor1"
+    - label: "Motor Drivers - X"
       generic_name: Driver1
       driver_class: external_connector
       pins: { step_pin: i2so.0, direction_pin: i2so.1, disable_pin: i2so.2 }
       notes: "Limit input gpio.42 corresponds to this connector in the wiki's own example config (axes.x.motor0) -- see generic_pins."
-    - label: "Motor2"
+    - label: "Motor Drivers - Y"
       generic_name: Driver2
       driver_class: external_connector
       pins: { step_pin: i2so.3, direction_pin: i2so.4, disable_pin: i2so.5 }
       notes: "Limit input gpio.41 corresponds to this connector in the wiki's own example config (axes.x.motor1) -- see generic_pins."
-    - label: "Motor3"
+    - label: "Motor Drivers - Z"
       generic_name: Driver3
       driver_class: external_connector
       pins: { step_pin: i2so.6, direction_pin: i2so.7, disable_pin: i2so.8 }
       notes: "Limit input gpio.40 corresponds to this connector in the wiki's own example config (axes.y.motor0) -- see generic_pins."
-    - label: "Motor4"
+    - label: "Motor Drivers - A"
       generic_name: Driver4
       driver_class: external_connector
       pins: { step_pin: i2so.9, direction_pin: i2so.10, disable_pin: i2so.11 }
       notes: "Limit input gpio.39 corresponds to this connector in the wiki's own example config (axes.y.motor1) -- see generic_pins."
-    - label: "Motor5"
+    - label: "Motor Drivers - B"
       generic_name: Driver5
       driver_class: external_connector
       pins: { step_pin: i2so.12, direction_pin: i2so.13, disable_pin: i2so.14 }
       notes: "Limit input gpio.38 corresponds to this connector in the wiki's own example config (axes.z.motor0, wired as limit_all_pin) -- see generic_pins."
-    - label: "Motor6"
+    - label: "Motor Drivers - C"
       generic_name: Driver6
       driver_class: external_connector
       pins: { step_pin: i2so.15, direction_pin: i2so.16, disable_pin: i2so.17 }
       notes: "Limit input gpio.37 corresponds to this connector in the wiki's own example config (axes.z.motor1, wired as limit_all_pin) -- see generic_pins."
-    - label: "Motor7"
+    - label: "Motor Drivers - U"
       generic_name: Driver7
       driver_class: external_connector
       pins: { step_pin: i2so.18, direction_pin: i2so.19, disable_pin: i2so.20 }
       notes: "Limit input gpio.36 corresponds to this connector in the wiki's own example config (axes.a.motor0) -- see generic_pins."
-    - label: "Motor8"
+    - label: "Motor Drivers - V"
       generic_name: Driver8
       driver_class: external_connector
       pins: { step_pin: i2so.21, direction_pin: i2so.22, disable_pin: i2so.23 }
@@ -127,39 +103,36 @@ generic_pins:
   # inputs have external pullup resistors. You do not need the :pu
   # attribute" -- though the wiki's own example config uses :pu anyway
   # (redundant but harmless).
-  - { label: "Switch input (Motor1 limit)", generic_name: "In42", mcu_pin: gpio.42, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor2 limit)", generic_name: "In41", mcu_pin: gpio.41, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor3 limit)", generic_name: "In40", mcu_pin: gpio.40, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor4 limit)", generic_name: "In39", mcu_pin: gpio.39, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor5 limit)", generic_name: "In38", mcu_pin: gpio.38, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor6 limit)", generic_name: "In37", mcu_pin: gpio.37, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor7 limit)", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-  - { label: "Switch input (Motor8 limit)", generic_name: "In48", mcu_pin: gpio.48, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
-
-  # Probe/toolsetter -- present only in the wiki's example config, no
-  # accompanying hardware/circuit prose (see board-level notes gap #2).
-  - { label: "Probe (example config: probe.pin)", generic_name: "In47", mcu_pin: gpio.47, direction: input, input_profile: { conditioning: raw }, notes: "No dedicated hardware writeup on the wiki page for this connector -- conditioning is a best-effort guess, not confirmed. Verify against schematic." }
-  - { label: "Toolsetter (example config: toolsetter_pin)", generic_name: "In3", mcu_pin: gpio.3, direction: input, input_profile: { conditioning: raw }, notes: "No dedicated hardware writeup on the wiki page for this connector -- conditioning is a best-effort guess, not confirmed. Verify against schematic. gpio.3 is also an ESP32-S3 strapping pin (JTAG source select) -- see chips/esp32s3.chip.yaml." }
+  - { label: "Inputs - GPIO.42", generic_name: "In42", mcu_pin: gpio.42, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.41", generic_name: "In41", mcu_pin: gpio.41, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.40", generic_name: "In40", mcu_pin: gpio.40, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.39", generic_name: "In39", mcu_pin: gpio.39, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.38", generic_name: "In38", mcu_pin: gpio.38, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.37", generic_name: "In37", mcu_pin: gpio.37, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.36", generic_name: "In36", mcu_pin: gpio.36, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.48", generic_name: "In48", mcu_pin: gpio.48, direction: input, input_profile: { conditioning: opto_isolated, external_pullup_required: false } }
+  - { label: "Inputs - GPIO.47", generic_name: "In47", mcu_pin: gpio.47, direction: input, input_profile: { conditioning: opto_isolated,  external_pullup_required: false } }
+  - { label: "Inputs - GPIO.3", generic_name: "In3", mcu_pin: gpio.3, direction: input, input_profile: { conditioning: opto_isolated,  external_pullup_required: false } }
 
   # 4x 5V outputs, 74AHCT125-buffered, "left to right" order per wiki.
   # gpio.4/gpio.5 also each drive a MOSFET simultaneously (see below) --
   # wiki: "you cannot use all (6) output circuits completely
   # independently."
-  - { label: "5V Output 1", generic_name: "5V Out4", mcu_pin: gpio.4, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 }, notes: "Also activates MOSFET1 (gpio.4) simultaneously -- see generic_pins entry FET4." }
-  - { label: "5V Output 2", generic_name: "5V Out5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 }, notes: "Also activates MOSFET2 (gpio.5) simultaneously -- see generic_pins entry FET5." }
-  - { label: "5V Output 3", generic_name: "5V Out46", mcu_pin: gpio.46, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 } }
-  - { label: "5V Output 4", generic_name: "5V Out45", mcu_pin: gpio.45, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 } }
+  - { label: "5V Outputs - GPIO.4", generic_name: "5V Out4", mcu_pin: gpio.4, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 }, notes: "Also activates MOSFET1 (gpio.4) simultaneously -- see generic_pins entry FET4." }
+  - { label: "5V Outputs - GPIO.2", generic_name: "5V Out5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 }, notes: "Also activates MOSFET2 (gpio.5) simultaneously -- see generic_pins entry FET5." }
+  - { label: "5V Outputs - GPIO.46", generic_name: "5V Out46", mcu_pin: gpio.46, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 } }
+  - { label: "5V Outputs - GPIO.45", generic_name: "5V Out45", mcu_pin: gpio.45, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 5.0, current_max_a: 0.020 } }
 
   # 2x MOSFETs, sharing gpio.4/gpio.5 with 5V outputs 1/2 above (genuine
   # dual-purpose, not independent circuits -- see their notes).
-  - { label: "MOSFET1", generic_name: "FET4", mcu_pin: gpio.4, direction: output, output_profile: { drive_type: mosfet_low_side, voltage_max: 12.0, current_max_a: 3.0 }, notes: "3A continuous, 5A peak per wiki. Voltage_max reflects the board's stated 12V VMot supply convention, not an independently confirmed MOSFET standoff rating. Shares gpio.4 with 5V Output 1 -- not independent." }
-  - { label: "MOSFET2", generic_name: "FET5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: mosfet_low_side, voltage_max: 12.0, current_max_a: 3.0 }, notes: "3A continuous, 5A peak per wiki. Voltage_max reflects the board's stated 12V VMot supply convention, not an independently confirmed MOSFET standoff rating. Shares gpio.5 with 5V Output 2 -- not independent." }
+  - { label: "FET1 gpio.4", generic_name: "FET4", mcu_pin: gpio.4, direction: output, output_profile: { drive_type: mosfet_low_side, voltage_max: 12.0, current_max_a: 3.0 }, notes: "3A continuous, 5A peak per wiki. Voltage_max reflects the board's stated 12V VMot supply convention, not an independently confirmed MOSFET standoff rating. Shares gpio.4 with 5V Output 1 -- not independent." }
+  - { label: "FET2 gpio.5", generic_name: "FET5", mcu_pin: gpio.5, direction: output, output_profile: { drive_type: mosfet_low_side, voltage_max: 12.0, current_max_a: 3.0 }, notes: "3A continuous, 5A peak per wiki. Voltage_max reflects the board's stated 12V VMot supply convention, not an independently confirmed MOSFET standoff rating. Shares gpio.5 with 5V Output 2 -- not independent." }
 
   # 0-10V analog spindle speed output (op-amp + low-pass filter, trim-pot
   # adjustable 5-10V max) plus its forward/reverse opto outputs.
-  - { label: "0-10V Output", generic_name: "Spindle 10V", mcu_pin: gpio.6, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 10.0 }, notes: "PWM + analog filter + trim pot; adjustable max 5-10V, must be measured/set before connecting to a VFD." }
-  - { label: "0-10V Forward", generic_name: "Spindle Out7", mcu_pin: gpio.7, direction: output, output_profile: { drive_type: open_collector }, notes: "Opto output to a common ground supplied by the VFD (per wiki, not the controller's own ground)." }
-  - { label: "0-10V Reverse", generic_name: "Spindle Out8", mcu_pin: gpio.8, direction: output, output_profile: { drive_type: open_collector }, notes: "Opto output to a common ground supplied by the VFD (per wiki, not the controller's own ground)." }
+  - { label: "0-10V - 10v gpio.6", generic_name: "Spindle 10V", mcu_pin: gpio.6, direction: output, output_profile: { drive_type: totem_pole, voltage_max: 10.0 }, notes: "PWM + analog filter + trim pot; adjustable max 5-10V, must be measured/set before connecting to a VFD." }
+  - { label: "0-10V - 1 gpio.7", generic_name: "Spindle Out7", mcu_pin: gpio.7, direction: output, output_profile: { drive_type: open_collector }, notes: "Opto output to a common ground supplied by the VFD (per wiki, not the controller's own ground)." }
+  - { label: "0-10V - 2 gpio.8", generic_name: "Spindle Out8", mcu_pin: gpio.8, direction: output, output_profile: { drive_type: open_collector }, notes: "Opto output to a common ground supplied by the VFD (per wiki, not the controller's own ground)." }
 
 rs485_channels:
   - label: "RS485"
