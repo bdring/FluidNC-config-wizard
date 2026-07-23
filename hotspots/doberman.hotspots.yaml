@@ -1,0 +1,131 @@
+board_id: doberman
+image: images/doberman.jpg
+hotspots:
+  - generic_name: "Driver1"
+    rect: {x: 23.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 24.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver2"
+    rect: {x: 30.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 31.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver3"
+    rect: {x: 36.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 37.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver4"
+    rect: {x: 43.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 44.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver5"
+    rect: {x: 50.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 51.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver6"
+    rect: {x: 57.00, y: 80.00, w: 5.00, h: 17.00}
+    label_rect: {x: 58.00, y: 82.00, w: 3.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver7"
+    rect: {x: 64.00, y: 80.00, w: 6.00, h: 17.00}
+    label_rect: {x: 65.00, y: 82.00, w: 4.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "Driver8"
+    rect: {x: 71.00, y: 80.00, w: 6.00, h: 17.00}
+    label_rect: {x: 72.00, y: 82.00, w: 4.00, h: 14.00}
+    label_orientation: vertical
+  - generic_name: "In42"
+    rect: {x: 18.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 19.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In41"
+    rect: {x: 23.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 24.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In40"
+    rect: {x: 28.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 29.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In39"
+    rect: {x: 33.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 34.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In38"
+    rect: {x: 38.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 39.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In37"
+    rect: {x: 43.00, y: 6.00, w: 4.00, h: 11.00}
+    label_rect: {x: 43.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In36"
+    rect: {x: 47.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 48.00, y: 8.00, w: 3.00, h: 8.00}
+    label_orientation: vertical
+  - generic_name: "In48"
+    rect: {x: 52.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 53.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In47"
+    rect: {x: 57.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 58.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "In3"
+    rect: {x: 62.00, y: 6.00, w: 5.00, h: 11.00}
+    label_rect: {x: 63.00, y: 7.00, w: 3.00, h: 9.00}
+    label_orientation: vertical
+  - generic_name: "5V Out4"
+    rect: {x: 68.00, y: 6.00, w: 5.00, h: 10.00}
+    label_rect: {x: 69.00, y: 8.00, w: 3.00, h: 7.00}
+    label_orientation: vertical
+  - generic_name: "5V Out5"
+    rect: {x: 73.00, y: 6.00, w: 4.00, h: 10.00}
+    label_rect: {x: 73.00, y: 8.00, w: 3.00, h: 7.00}
+    label_orientation: vertical
+  - generic_name: "5V Out46"
+    rect: {x: 77.00, y: 6.00, w: 5.00, h: 10.00}
+    label_rect: {x: 78.00, y: 8.00, w: 3.00, h: 7.00}
+    label_orientation: vertical
+  - generic_name: "5V Out45"
+    rect: {x: 82.00, y: 6.00, w: 5.00, h: 10.00}
+    label_rect: {x: 83.00, y: 8.00, w: 3.00, h: 7.00}
+    label_orientation: vertical
+  - generic_name: "FET4"
+    rect: {x: 85.00, y: 52.00, w: 7.00, h: 7.00}
+    label_rect: {x: 85.00, y: 53.00, w: 6.00, h: 5.00}
+    label_orientation: vertical
+  - generic_name: "FET5"
+    rect: {x: 85.00, y: 59.00, w: 7.00, h: 6.00}
+    label_rect: {x: 85.00, y: 60.00, w: 7.00, h: 4.00}
+    label_orientation: horizontal
+  - generic_name: "Spindle 10V"
+    rect: {x: 86.00, y: 33.00, w: 8.00, h: 3.00}
+    label_rect: {x: 86.00, y: 33.00, w: 7.00, h: 3.00}
+    label_orientation: horizontal
+  - generic_name: "Spindle Out7"
+    rect: {x: 86.00, y: 28.00, w: 8.00, h: 3.00}
+    label_rect: {x: 86.00, y: 28.00, w: 13.00, h: 3.00}
+    label_orientation: horizontal
+  - generic_name: "Spindle Out8"
+    rect: {x: 86.00, y: 25.00, w: 8.00, h: 3.00}
+    label_rect: {x: 86.00, y: 25.00, w: 13.00, h: 2.00}
+    label_orientation: horizontal
+  - generic_name: "IO13"
+    rect: {x: 50.00, y: 69.00, w: 2.00, h: 4.00}
+    label_rect: {x: 50.00, y: 56.00, w: 2.00, h: 11.00}
+    label_orientation: vertical
+  - generic_name: "IO10"
+    rect: {x: 48.00, y: 69.00, w: 2.00, h: 4.00}
+    label_rect: {x: 48.00, y: 56.00, w: 2.00, h: 11.00}
+    label_orientation: vertical
+  - generic_name: "IO15"
+    rect: {x: 46.00, y: 69.00, w: 2.00, h: 4.00}
+    label_rect: {x: 46.00, y: 56.00, w: 2.00, h: 11.00}
+    label_orientation: vertical
+  - generic_name: "Expander"
+    rect: {x: 85.00, y: 77.00, w: 9.00, h: 12.00}
+    label_rect: {x: 86.00, y: 81.00, w: 6.00, h: 3.00}
+    label_orientation: horizontal
+  - generic_name: "IO14"
+    rect: {x: 86.00, y: 41.00, w: 6.00, h: 10.00}
+    label_rect: {x: 86.00, y: 44.00, w: 6.00, h: 3.00}
+    label_orientation: horizontal
