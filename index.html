@@ -756,7 +756,12 @@ function sectionRoleChildren(docSection, attrs) {
     const attr = pinAttributesOf(docSection, fullKey);
     if (!attr || !attrSet.has(attr)) return;
     const key = whichForField(docSection, fullKey);
-    children[key] = { label: titleLabel(key) };
+    // attr carried alongside label for the same reason buildSpindleTypes()'s
+    // pin-entry tuples do -- cascadeOptionsFor() needs to know which
+    // specific field is "pwm"-tagged (e.g. user_outputs.analogN_pin) to
+    // filter it per-physical-pin without also dropping this section's
+    // plain-output fields (e.g. that same section's digitalN_pin).
+    children[key] = { label: titleLabel(key), attr };
   });
   return children;
 }
@@ -943,8 +948,17 @@ function buildSpindleTypes() {
         return;
       }
       const key = stripPinSuffix(fullKey);
-      const entry = [key, titleLabel(key)];
       const attr = pinAttributesOf(cfgKey, fullKey);
+      // Third element carries the field's own pin_attributes tag (e.g.
+      // "pwm" vs plain "output") -- every existing [key,label] consumer
+      // destructures only the first two and simply ignores it, so this is
+      // additive; cascadeOptionsFor() is the one place that reads it, to
+      // drop a "pwm"-tagged field from a physical pin that can't actually
+      // do PWM (see pinSupportsPwm()) without also dropping that same
+      // type's other, plain-output fields (e.g. PWM's own direction_pin/
+      // enable_pin, which any output-capable pin -- I2SO included -- can
+      // still serve).
+      const entry = [key, titleLabel(key), attr];
       if (!attr || SPINDLE_PIN_OUTPUT_ATTRS.has(attr)) pins.push(entry);
       if (attr && SPINDLE_PIN_INPUT_ATTRS.has(attr)) inputPins.push(entry);
     });
@@ -1769,11 +1783,25 @@ function resolveFieldSpec(parentPath, key) {
  * types and user outputs (digital/analog) both go through this same
  * mechanism -- it's what keeps the primary dropdown from growing every
  * time either set grows (a new spindle type, or config_items.yaml adding
- * more digital/analog output slots). */
-function cascadeOptionsFor(category) {
+ * more digital/analog output slots).
+ *
+ * `basePin`, when given, drops any "pwm"-tagged field this exact physical
+ * pin can't actually serve (see pinSupportsPwm()) -- e.g. a spindle:pwm
+ * pin picked on an I2SO pin still offers direction_pin/enable_pin (plain
+ * output, fine on I2SO), just not output_pin (needs real hardware PWM).
+ * Callers that don't have a physical pin in hand (axisMotorSlotOptions()'s
+ * bare axis/motor vocabulary has none to check against) simply don't pass
+ * one, and nothing is filtered -- this never turns a real option list into
+ * an empty one in practice (every current spindle type and generic section
+ * that has a "pwm" field also has at least one plain-output field
+ * alongside it, verified against config_items.yaml), but callers should
+ * still treat an empty array as "nothing selectable," same as null. */
+function cascadeOptionsFor(category, basePin) {
+  const pwmOk = !basePin || pinSupportsPwm(basePin);
+  const dropPwmOnly = (entries) => pwmOk ? entries : entries.filter(([, , attr]) => attr !== "pwm");
   if (category.startsWith("spindle:")) {
     const type = category.split(":")[1];
-    return SPINDLE_TYPES[type] ? SPINDLE_TYPES[type].pins : null;
+    return SPINDLE_TYPES[type] ? dropPwmOnly(SPINDLE_TYPES[type].pins) : null;
   }
   if (category.startsWith("axis:")) {
     return axisMotorSlotOptions();
@@ -1783,7 +1811,8 @@ function cascadeOptionsFor(category) {
     // sectionRoleChildren() -- reused here rather than re-derived, so
     // there's exactly one place that decides what counts as e.g. a
     // coolant/status-output/sdcard pin.
-    return Object.entries(EITHER_ROLE_TREE[category].children).map(([k, v]) => [k, v.label]);
+    const entries = Object.entries(EITHER_ROLE_TREE[category].children).map(([k, v]) => [k, v.label, v.attr]);
+    return dropPwmOnly(entries);
   }
   return null;
 }
@@ -1793,7 +1822,7 @@ function cascadeOptionsFor(category) {
  * via cascadeOptionsFor()) -- spindle types, and every generically-scanned
  * output section (coolant/status_output/sdcard/user_outputs today, see
  * GENERIC_ROLE_TREE_OUTPUT_KEYS) alike. */
-function outputCategoryOptions() {
+function outputCategoryOptions(basePin) {
   const opts = [{ value: "unused", label: "— Unused —" }];
   Object.keys(SPINDLE_TYPES).forEach(t => opts.push({ value: `spindle:${t}`, label: `Spindle — ${SPINDLE_TYPES[t].label}` }));
   GENERIC_ROLE_TREE_OUTPUT_KEYS.forEach(k => opts.push({ value: k, label: EITHER_ROLE_TREE[k].label }));
@@ -1802,8 +1831,15 @@ function outputCategoryOptions() {
   // dedicated motor socket (STEP/DIR/UART/SPI), so any output-capable pin
   // can serve as one. Step 2 (cascadeOptionsFor) picks which axis/motor
   // slot this pin drives, same vocabulary Motor sockets use.
-  opts.push({ value: "axis:rc_servo", label: "Axis — RC Servo" });
-  opts.push({ value: "axis:solenoid", label: "Axis — Solenoid" });
+  // Unlike a spindle type (a mix of pwm/plain fields, filtered per-field
+  // by cascadeOptionsFor()), these two ARE their one pwm-tagged output_pin
+  // -- there's no non-pwm fallback field to offer instead, so an I2SO pin
+  // (or any other basePin pinSupportsPwm() says no to) drops the whole
+  // category here rather than a sub-option later.
+  if (!basePin || pinSupportsPwm(basePin)) {
+    opts.push({ value: "axis:rc_servo", label: "Axis — RC Servo" });
+    opts.push({ value: "axis:solenoid", label: "Axis — Solenoid" });
+  }
   return opts;
 }
 
@@ -2032,6 +2068,48 @@ let kinematicsType = "Cartesian"; // selected top-level kinematics system, defau
  * state needed for this section at all. */
 let chipGpioCaps = {};     // gpio number -> chip-file gpio fact object (see loadBoard()/pinWidgetHtml())
 let genericPinProfiles = {}; // basePin string (e.g. "gpio.2") -> this board's generic_pins input_profile object, if any (see loadBoard()/pinWidgetHtml())
+
+// I2S-shift-register virtual pins (i2so.N) are a fixed, universal fact of
+// what an I2S shift-register output IS -- not a per-board or per-chip fact
+// that could vary and therefore needs sourcing from a data file, unlike
+// chipGpioCaps (pullup/pulldown genuinely DO vary per chip/pin and come
+// from chips/<id>.chip.yaml). Same shape AND same omit-when-false
+// convention as a chipGpioCaps entry (e.g. chips/esp32.chip.yaml's
+// { pin: 1, input: true, output: true } leaves pullup/pulldown out rather
+// than writing them as false) -- every consumer already treats absent and
+// false identically (caps.pullup || caps.pulldown, caps.output), so only
+// output needs stating. Consulted through one accessor (pinCapsFor()
+// below) instead of ad hoc basePin.startsWith("i2so.") checks scattered
+// per call site.
+const I2SO_PIN_CAPS = { output: true };
+
+// Per-pin capability record for any mcu_pin string, real (gpio.N, sourced
+// from this board's chip file) or virtual (i2so.N, always I2SO_PIN_CAPS).
+// Returns null for an unrecognized bus or a gpio number this chip file
+// doesn't document -- callers must treat that as "unknown fact, don't
+// guess" (same posture chipGpioCaps lookups already had before this
+// accessor existed), never as "assume capable."
+function pinCapsFor(basePin) {
+  if (basePin.startsWith("i2so.")) return I2SO_PIN_CAPS;
+  if (basePin.startsWith("gpio.")) return chipGpioCaps[parseInt(basePin.slice(5), 10)] || null;
+  return null;
+}
+
+// Which mcu_pin BUS (gpio vs i2so) supports PWM at all -- a fact about the
+// bus/pin-address-space itself, not about any individual pin within it,
+// and not chip-specific either (true for any chip family this schema could
+// ever describe): a GPIO-bus pin capable of digital output can drive LEDC
+// PWM via the GPIO matrix; an I2SO-bus pin never can, regardless of index,
+// since it's a serial shift-register output with no timer channel behind
+// it. No chip.yaml/board.yaml data needed for this -- unlike pullup/
+// pulldown, it doesn't vary per pin or per chip, so it isn't part of
+// pinCapsFor()'s per-pin record.
+const BUS_PWM_CAPABLE = { gpio: true, i2so: false };
+
+function pinSupportsPwm(basePin) {
+  const caps = pinCapsFor(basePin);
+  return !!(caps && caps.output && BUS_PWM_CAPABLE[basePin.split(".")[0]]);
+}
 
 /* A pin's own conditioning circuit fixes which electrical level it reads
  * while current is actively conducting through it (e.g. an opto-isolator's
@@ -2422,10 +2500,9 @@ function pinWidgetHtml(slot) {
   // output, SPI/UART/I2S output line). FluidNC never reads it as an input,
   // so no pull resistor is meaningful here regardless of what the pin
   // itself is otherwise capable of.
-  let supportsPull = !OUTPUT_ONLY_PIN_KEYS.has(slot.key) && !slot.basePin.startsWith("i2so.");
-  if (supportsPull && slot.basePin.startsWith("gpio.")) {
-    const num = parseInt(slot.basePin.slice(5), 10);
-    const caps = chipGpioCaps[num];
+  let supportsPull = !OUTPUT_ONLY_PIN_KEYS.has(slot.key);
+  if (supportsPull) {
+    const caps = pinCapsFor(slot.basePin);
     if (caps) supportsPull = !!(caps.pullup || caps.pulldown);
   }
   // Board-level override, by conditioning -- chip capability above is a
@@ -3050,10 +3127,16 @@ function refreshRoleUniqueness() {
     const outputControls = row.querySelector(".output-controls");
     if (outputControls) {
       const [primary, secondary] = outputControls.querySelectorAll("select");
+      // makeOutputRow() only ever renders for a single-pin resource (a
+      // generic pin or a resolved module-socket connector) -- resourcePins
+      // for one of those is always exactly [basePin], see
+      // computeResourcePins(); needed here so cascadeOptionsFor() can drop
+      // a "pwm"-tagged sub-option this exact pin can't serve.
+      const basePin = (resourcePins[key] || [])[0];
       if (primary) {
         Array.from(primary.options).forEach(opt => {
           if (opt.value === "unused") { opt.disabled = false; return; }
-          const copts = cascadeOptionsFor(opt.value);
+          const copts = cascadeOptionsFor(opt.value, basePin);
           if (copts) {
             // A cascading category (spindle:*, user_output, ...) has no
             // single "complete" value of its own -- gray it out only if
@@ -3595,7 +3678,7 @@ function renderResources() {
       // plain "input" (and any other non-"output" direction) keeps the
       // input-only tree, unchanged.
       sec.appendChild(p.direction === "output"
-        ? makeOutputRow(key, name, sub, p.label)
+        ? makeOutputRow(key, name, sub, p.label, p.mcu_pin)
         : makeInputRow(key, name, sub, p.direction === "either" ? EITHER_ROLE_TREE : INPUT_ROLE_TREE, p.label));
     });
     col.appendChild(sec);
@@ -3662,7 +3745,7 @@ function renderResources() {
           if (c.kind === "generic_pin") {
             const csub = `${c.mcu_pin} — ${c.direction}`;
             sub2.appendChild(c.direction === "output"
-              ? makeOutputRow(ckey, c.generic_name, csub, c.label)
+              ? makeOutputRow(ckey, c.generic_name, csub, c.label, c.mcu_pin)
               : makeInputRow(ckey, c.generic_name, csub, c.direction === "either" ? EITHER_ROLE_TREE : INPUT_ROLE_TREE, c.label));
           } else if (c.kind === "expansion_uart") {
             const pins = `txd=${c.txd_pin} rxd=${c.rxd_pin}${c.connector_type ? " (" + c.connector_type + ")" : ""}`;
@@ -3792,7 +3875,7 @@ function makeRow(key, name, sub, options, vendorLabel) {
  * This is what keeps the per-pin option list from growing every time a
  * new spindle type (Relay, HBridge, Dac, ...) gets added to SPINDLE_TYPES
  * -- only the (hidden-until-needed) step 2 list grows. */
-function makeOutputRow(key, name, sub, vendorLabel) {
+function makeOutputRow(key, name, sub, vendorLabel, mcuPin) {
   const row = document.createElement("div");
   row.className = "row output-row";
   row.dataset.resourceKey = key;
@@ -3806,7 +3889,7 @@ function makeOutputRow(key, name, sub, vendorLabel) {
   controls.className = "output-controls";
 
   const primary = document.createElement("select");
-  outputCategoryOptions().forEach(o => {
+  outputCategoryOptions(mcuPin).forEach(o => {
     const opt = document.createElement("option");
     opt.value = o.value; opt.textContent = o.label;
     primary.appendChild(opt);
@@ -3817,8 +3900,8 @@ function makeOutputRow(key, name, sub, vendorLabel) {
 
   function refreshSecondary() {
     const cat = primary.value;
-    const opts = cascadeOptionsFor(cat);
-    if (opts) {
+    const opts = cascadeOptionsFor(cat, mcuPin);
+    if (opts && opts.length) {
       const curSub = roleSubValue(bindings[key] || "");
       secondary.innerHTML = "";
       opts.forEach(([val, label]) => {
@@ -3844,7 +3927,8 @@ function makeOutputRow(key, name, sub, vendorLabel) {
 
   primary.onchange = () => {
     const cat = primary.value;
-    if (cascadeOptionsFor(cat)) {
+    const catOpts = cascadeOptionsFor(cat, mcuPin);
+    if (catOpts && catOpts.length) {
       refreshSecondary();
       const full = `${cat}:${secondary.value}`;
       // A category with every secondary option already claimed elsewhere is
@@ -4544,6 +4628,31 @@ function generateDraft() {
     // block's first field (txd_pin/uart_num) rather than the whole section.
     const uartBlock = { txd_pin: ch.tx_pin, rxd_pin: ch.rx_pin };
     if (ch.rts_pin) uartBlock.rts_pin = ch.rts_pin;
+    // baud/mode: no fixed board fact for these (rs485_channel's own schema
+    // has no such field -- the physical bus doesn't dictate a rate, it's a
+    // property of whichever VFD gets wired up), so these can't come from
+    // board.yaml the way expansion_uart's baud/mode do. Given a
+    // "suggested" default via paramDefaultOverrides instead of the generic
+    // uartN.baud "typical" tuning (115200, meant for a TMC UART chain) --
+    // real-world Modbus VFD links overwhelmingly use 9600/8N1 regardless
+    // of model (confirmed against FluidNC/data-wmb/gr3rodent.yaml's own
+    // real YL620 example). Not model-specific (no per-VFD-model baud/mode
+    // data exists anywhere in this wizard or in FluidNC's own VFD driver
+    // source -- baud/mode are pure config.yaml matters, never compiled
+    // into a VFD class), but close enough across every supported model to
+    // be worth pre-filling. Per collectAndInjectSlots()'s general
+    // override handling, this silently pre-fills the field (same as a
+    // "board"/"firmware" default would) rather than leaving it a bare
+    // TBD -- NOT merely offered via the "def" button and otherwise inert;
+    // a config author who needs something else still edits it directly,
+    // or clears it with the "✕" button, same as any other pre-filled
+    // field, and defaultKind: "suggested" is what gives it the softer
+    // "verify for your hardware" tooltip wording (see paramWidgetHtml())
+    // rather than "board"'s "documented/corrected" framing.
+    paramDefaultOverrides[`uart${n}.baud`] = { default: 9600, defaultKind: "suggested" };
+    paramDefaultOverrides[`uart${n}.mode`] = { default: "8N1", defaultKind: "suggested" };
+    uartBlock.baud = TBD;
+    uartBlock.mode = TBD;
     const annotateLabel = ch.commentLabel || ch.label;
     annotate(cfg, `uart${n}`, annotateLabel);
     cfg[`uart${n}`] = uartBlock;
