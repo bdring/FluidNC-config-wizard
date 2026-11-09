@@ -51,7 +51,7 @@ motor_sockets:
       driver_class: onboard_fixed
       fixed_motor_type: tmc_2209
       pins: { step_pin: gpio.14, direction_pin: gpio.12 }
-      extra: { bus: uart1, addr: 0 }
+      extra: { bus: uart1, addr: 0, r_sense_ohms_hint: 0.110 }
       # Standard 4-wire bipolar stepper motor connection.
       output_profile: { drive_type: bipolar_stepper }
     - label: "Y Motor"
@@ -59,7 +59,7 @@ motor_sockets:
       driver_class: onboard_fixed
       fixed_motor_type: tmc_2209
       pins: { step_pin: gpio.25, direction_pin: gpio.26 }
-      extra: { bus: uart1, addr: 1 }
+      extra: { bus: uart1, addr: 1, r_sense_ohms_hint: 0.110 }
       output_profile: { drive_type: bipolar_stepper }
     - label: "Z (pen lift)"
       generic_name: "Motor3"
